@@ -1,7 +1,7 @@
 {
 	"id": "synology-sync",
 	"name": "Synology Sync",
-	"version": "0.1.13",
+	"version": "0.1.14",
 	"minAppVersion": "1.13.0",
 	"description": "Sync your vault with Synology NAS via WebAPI.",
 	"author": "seaHi",

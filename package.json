@@ -1,6 +1,6 @@
 {
 	"name": "synology-sync",
-	"version": "0.1.13",
+	"version": "0.1.14",
 	"description": "Sync your vault with Synology NAS via WebAPI.",
 	"main": "main.js",
 	"type": "module",

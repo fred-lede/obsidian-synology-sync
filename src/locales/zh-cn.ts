@@ -61,6 +61,7 @@ export default {
 	'notice.connFailed': '连接失败: {{error}}',
 
 	'settings.dangerZone': '危险操作 (Danger Zone) / 首次初始化',
+	'settings.dangerZone.desc': '以下操作涉及文件单向强制覆盖或状态清除，请谨慎操作。',
 	'settings.forceUpload.name': '强制全量上传 (覆盖群晖)',
 	'settings.forceUpload.desc': '以本地为准。强制清空远端额外文件，并将本地所有笔记推送到群晖。',
 	'settings.forceUpload.btn': '强制上传',

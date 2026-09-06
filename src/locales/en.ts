@@ -59,6 +59,7 @@ export default {
 	'notice.connFailed': 'Connection Failed: {{error}}',
 
 	'settings.dangerZone': 'Danger Zone / First-time Init',
+	'settings.dangerZone.desc': 'The following operations involve one-way forced overwriting of files or state clearing, please proceed with caution.',
 	'settings.forceUpload.name': 'Force Full Upload (Overwrite NAS)',
 	'settings.forceUpload.desc': 'Local truth. Voids remote extra files, pushes all local notes to NAS.',
 	'settings.forceUpload.btn': 'Force Upload',

@@ -2,15 +2,15 @@
 
 ## Project overview
 
-- Target: Obsidian Community Plugin (TypeScript → bundled JavaScript).
+- Target: Obsidian Synology Sync Plugin (TypeScript → bundled JavaScript).
 - Entry point: `src/main.ts` compiled to `main.js` and loaded by Obsidian.
 - Required release artifacts: `main.js`, `manifest.json`, and optional `styles.css`.
 
 ## Environment & tooling
 
 - Node.js: use current LTS (Node 18+ recommended).
-- **Package manager: npm** (required for this sample - `package.json` defines npm scripts and dependencies).
-- **Bundler: esbuild** (required for this sample - `esbuild.config.mjs` and build scripts depend on it). Alternative bundlers like Rollup or webpack are acceptable for other projects if they bundle all external dependencies into `main.js`.
+- **Package manager: npm** (required for this plugin - `package.json` defines npm scripts and dependencies).
+- **Bundler: esbuild** (required for this plugin - `esbuild.config.mjs` and build scripts depend on it).
 - Types: `obsidian` type definitions.
 
 **Note**: This project has specific technical dependencies on npm and esbuild.
@@ -148,6 +148,8 @@ Follow Obsidian's **Developer Policies** and **Plugin Guidelines**. In particula
 **Do**
 
 - **i18n check**: Every time there's a functional change involving UI text, Notice messages, or Commands, you MUST check and update the multi-language support (i18n) by modifying `src/locales/en.ts` and `src/locales/zh-cn.ts`.
+- **Synology Drive API Docs**: For any Synology Drive API details, you MUST refer to `doc/Synology_Drive_v2_API_Documentation.md`.
+- **Context7 Usage**: For uncertain APIs (like Obsidian API) and development technical details, you MUST use the `context7` tool to query the latest documentation before making assumptions.
 - **Synology API Error Handling**: The Synology Drive API is non-RESTful. For specific errors (e.g. path not found, permissions), it returns HTTP 200 with `{ "success": false, "error": { "code": 1000 } }`. You MUST explicitly check for `json.success === false` in all API responses to prevent silent failures.
 - Add commands with stable IDs (don't rename once released).
 - Provide defaults and validation in settings.

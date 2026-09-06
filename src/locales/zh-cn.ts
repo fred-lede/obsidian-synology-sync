@@ -34,9 +34,10 @@ export default {
 	'notice.forceDownloadSuccess': '强制全量下载完成',
 	'notice.forceDownloadFailed': '强制下载失败: {{error}}',
 	'notice.rebuildSuccess': '同步基准构建完成',
-	'notice.rebuildFailed': '构建基准失败: {{error}}',
+	'notice.rebuildFailed': '重建基线状态失败: {{error}}',
 
 	// settings.ts
+	'settings.connection': '连接与基本配置',
 	'settings.nasUrl.name': 'NAS 地址 (URL)',
 	'settings.nasUrl.desc': '例如: https://nas.example.com:5001',
 	'settings.username.name': '用户名',
@@ -47,6 +48,9 @@ export default {
 	'settings.otp.desc': '如果群晖未开启双重验证，请留空。填入验证成功后会自动清空。',
 	'settings.syncFolder.name': '同步目标文件夹',
 	'settings.syncFolder.desc': '群晖上的同步目标文件夹，必须存在 (例如: /home/Drive/ObsidianSync)',
+
+	'settings.debugMode.name': '调试模式',
+	'settings.debugMode.desc': '开启后将在开发者控制台输出 API 请求和响应的详细日志，用于排查同步问题。',
 	
 	'settings.testConn.name': '测试连接并登录',
 	'settings.testConn.desc.hasSid': '当前已有授权会话 (SID)',

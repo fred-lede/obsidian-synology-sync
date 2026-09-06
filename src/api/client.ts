@@ -15,6 +15,7 @@ export class SynologyClient {
 	private password?: string;
 	private otpCode?: string; // 2FA 双重验证码
 	private sid?: string; // Session ID
+	private _debugMode: boolean = false;
 
 	constructor(baseUrl: string, username: string, password?: string, otpCode?: string) {
 		// 确保不以斜杠结尾
@@ -22,6 +23,16 @@ export class SynologyClient {
 		this.username = username;
 		this.password = password;
 		this.otpCode = otpCode;
+	}
+
+	set debugMode(value: boolean) {
+		this._debugMode = value;
+	}
+
+	private debugLog(...args: unknown[]) {
+		if (this._debugMode) {
+			console.debug('[SynologySync:DEBUG]', ...args);
+		}
 	}
 
 	/**
@@ -201,7 +212,7 @@ export class SynologyClient {
 	 * 列出目录下的文件和文件夹
 	 */
 	async listFiles(path: string): Promise<unknown> {
-		console.debug(`[SynologySync:DEBUG] listFiles called with path: ${path}`);
+		this.debugLog('listFiles', { path });
 		const endpoint = '/api/SynologyDrive/default/v2/files/list';
 		
 		let allFiles: unknown[] = [];
@@ -232,7 +243,7 @@ export class SynologyClient {
 			req.body = "{}"; // 没有额外的 body
 
 			const res = await this.safeRequestUrl(req);
-			console.debug(`[SynologySync:DEBUG] listFiles response: status=${res.status}, body=${typeof res.text === 'string' ? res.text.substring(0, 500) : 'N/A'}`);
+			this.debugLog('listFiles response', { status: res.status, itemCount: (res.json as {data?: {items?: unknown[]}})?.data?.items?.length });
 			if (res.status >= 400) {
 				const json = res.json as ApiResponse | null;
 				const errText = (json && json.error ? `API Error Code: ${json.error.code}` : res.text) || `HTTP ${res.status}`;
@@ -328,7 +339,7 @@ export class SynologyClient {
 	 * 创建或覆盖文件 (通过 multipart/form-data 上传，支持大文件)
 	 */
 	async uploadFile(path: string, buffer: ArrayBuffer, isRetry: boolean = false): Promise<unknown> {
-		console.debug(`[SynologySync:DEBUG] uploadFile called with path: ${path}, bufferSize: ${buffer.byteLength}`);
+		this.debugLog('uploadFile', { path, size: buffer.byteLength, isRetry });
 		const endpoint = '/api/SynologyDrive/default/v2/files/upload';
 		const url = new URL(this.baseUrl + endpoint);
 		
@@ -376,7 +387,7 @@ export class SynologyClient {
 		if (this.sid) req.headers!['Cookie'] = `id=${this.sid};`;
 
 		const res = await this.safeRequestUrl(req);
-		console.debug(`[SynologySync:DEBUG] uploadFile response: status=${res.status}, body=${typeof res.text === 'string' ? res.text.substring(0, 500) : 'N/A'}`);
+		this.debugLog('uploadFile response', { status: res.status, success: (res.json as ApiResponse | null)?.success, errorCode: (res.json as ApiResponse | null)?.error?.code });
 		if (res.status >= 400) {
 			const json = res.json as ApiResponse | null;
 			const errText = (json && json.error ? `API Error Code: ${json.error.code}` : res.text) || `HTTP ${res.status}`;
@@ -404,7 +415,7 @@ export class SynologyClient {
 	 * 单个文件下载返回的应该是文件的 buffer (Content-Type 为对应的 mime)
 	 */
 	async downloadFile(path: string): Promise<ArrayBuffer> {
-		console.debug(`[SynologySync:DEBUG] downloadFile called with path: ${path}`);
+		this.debugLog('downloadFile', { path });
 		const endpoint = '/api/SynologyDrive/default/v2/files/download';
 		const url = new URL(this.baseUrl + endpoint);
 		if (this.sid) {
@@ -423,7 +434,7 @@ export class SynologyClient {
 		if (this.sid) req.headers!['Cookie'] = `id=${this.sid};`;
 
 		const res = await this.safeRequestUrl(req);
-		console.debug(`[SynologySync:DEBUG] downloadFile response: status=${res.status}, hasDisposition=${!!(res.headers?.['content-disposition'])}, bodyLen=${res.arrayBuffer?.byteLength}, textPreview=${typeof res.text === 'string' ? res.text.substring(0, 300) : 'N/A'}`);
+		this.debugLog('downloadFile response', { status: res.status, hasDisposition: !!(res.headers?.['content-disposition']), bodyLen: res.arrayBuffer?.byteLength });
 		if (res.status >= 400) {
 			const json = res.json as ApiResponse | null;
 			const errText = (json && json.error ? `API Error Code: ${json.error.code}` : res.text) || `HTTP ${res.status}`;

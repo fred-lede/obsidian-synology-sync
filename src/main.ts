@@ -241,6 +241,7 @@ export default class SynologySyncPlugin extends Plugin {
 		const { nasUrl, username, password, otpCode, sid } = this.settings;
 		const { SynologyClient } = await import('./api/client');
 		const client = new SynologyClient(nasUrl, username, password, otpCode);
+		client.debugMode = this.settings.debugMode ?? false;
 		if (sid) (client as unknown as { sid: string }).sid = sid;
 		return client;
 	}
@@ -256,6 +257,7 @@ export default class SynologySyncPlugin extends Plugin {
 		const { SyncState } = await import('./sync/state');
 
 		const client = new SynologyClient(nasUrl, username, password, otpCode);
+		client.debugMode = this.settings.debugMode ?? false;
 		(client as unknown as { sid: string }).sid = sid;
 
 		const state = new SyncState(this.app, this.manifest.dir!);
@@ -394,6 +396,7 @@ export default class SynologySyncPlugin extends Plugin {
 			}
 
 			const client = new SynologyClient(nasUrl, username, password);
+			client.debugMode = this.settings.debugMode ?? false;
 			(client as unknown as { sid: string }).sid = sid; // 注入现有的 sid
 
 			// 读取文件内容为二进制
@@ -442,6 +445,7 @@ export default class SynologySyncPlugin extends Plugin {
 			}
 
 			const client = new SynologyClient(nasUrl, username, password);
+			client.debugMode = this.settings.debugMode ?? false;
 			(client as unknown as { sid: string }).sid = sid;
 
 			let targetPath = `${syncFolder}/${activeFile.path}`;

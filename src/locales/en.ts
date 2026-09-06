@@ -35,6 +35,7 @@ export default {
 	'notice.rebuildSuccess': 'Sync Base Rebuild Completed',
 	'notice.rebuildFailed': 'Rebuild Base Failed: {{error}}',
 
+	'settings.connection': 'Connection & Basic Settings',
 	'settings.nasUrl.name': 'NAS Address (URL)',
 	'settings.nasUrl.desc': 'e.g., https://nas.example.com:5001',
 	'settings.username.name': 'Username',
@@ -45,6 +46,9 @@ export default {
 	'settings.otp.desc': 'Leave empty if 2FA is disabled on your NAS. Cleared automatically on success.',
 	'settings.syncFolder.name': 'Target Sync Folder',
 	'settings.syncFolder.desc': 'Sync target folder on NAS (must exist), e.g., /home/Drive/ObsidianSync',
+
+	'settings.debugMode.name': 'Debug Mode',
+	'settings.debugMode.desc': 'Enable verbose logging of API requests and responses in the developer console. Useful for troubleshooting sync issues.',
 	
 	'settings.testConn.name': 'Test Connection & Login',
 	'settings.testConn.desc.hasSid': 'Authorized session alive (SID)',

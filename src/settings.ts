@@ -11,6 +11,7 @@ export interface SynologySyncSettings {
 	sid: string;
 	syncFolder: string;
 	lastSyncTime?: number;
+	debugMode?: boolean;
 }
 
 export const DEFAULT_SETTINGS: SynologySyncSettings = {
@@ -20,6 +21,7 @@ export const DEFAULT_SETTINGS: SynologySyncSettings = {
 	otpCode: '',
 	sid: '',
 	syncFolder: '/ObsidianSync',
+	debugMode: false,
 };
 
 class ConfirmModal extends Modal {
@@ -127,10 +129,13 @@ export class SynologySyncSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-
 	// @ts-ignore: To support Obsidian 1.13+ setting search capabilities
 	getSettingDefinitions() {
 		return [
+			{
+				type: "heading",
+				name: t('settings.connection')
+			},
 			{
 				id: "nasUrl",
 				name: t('settings.nasUrl.name'),
@@ -248,12 +253,24 @@ export class SynologySyncSettingTab extends PluginSettingTab {
 				}
 			},
 			{
-				id: "dangerZoneHeading",
-				name: "",
-				description: "",
+				id: "debugMode",
+				name: t('settings.debugMode.name'),
+				description: t('settings.debugMode.desc'),
 				render: (setting: Setting) => {
-					setting.setHeading();
+					setting.addToggle((toggle) =>
+						toggle
+							.setValue(this.plugin.settings.debugMode ?? false)
+							.onChange(async (value) => {
+								this.plugin.settings.debugMode = value;
+								await this.plugin.saveSettings();
+							})
+					);
 				}
+			},
+			{
+				type: "heading",
+				name: t('settings.dangerZone'),
+				description: "以下操作涉及文件单向强制覆盖或状态清除，请谨慎操作。"
 			},
 			{
 				id: "forceUpload",

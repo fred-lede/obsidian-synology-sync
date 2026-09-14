@@ -1,4 +1,5 @@
 import { requestUrl, RequestUrlParam, RequestUrlResponse } from 'obsidian';
+import { t } from '../locales';
 
 interface ApiResponse {
 	success?: boolean;
@@ -23,6 +24,10 @@ export class SynologyClient {
 		this.username = username;
 		this.password = password;
 		this.otpCode = otpCode;
+	}
+
+	getSyncTarget(folder: string): string {
+		return JSON.stringify([this.baseUrl, this.username, folder.replace(/\/+$/, '')]);
 	}
 
 	set debugMode(value: boolean) {
@@ -146,6 +151,7 @@ export class SynologyClient {
 			throw new Error(`API Error Code: ${code}`);
 		}
 		
+		if (json?.success !== true) throw new Error(t('safety.invalidResponse'));
 		return res;
 	}
 
@@ -256,13 +262,15 @@ export class SynologyClient {
 				throw new Error(`API Error Code: ${code} - ${json.error?.errors?.message || 'list node failed'}`);
 			}
 			
+			if (json?.success !== true || !json.data || !Array.isArray(json.data.items)) throw new Error(t('safety.invalidResponse'));
+			if (json.data.items.some(item => !item || typeof item !== 'object' || !('name' in item) || typeof item.name !== 'string')) throw new Error(t('safety.invalidResponse'));
 			lastResponse = json;
 			
 			if (json?.data?.items && Array.isArray(json.data.items)) {
 				allFiles.push(...json.data.items);
 			}
 			
-			if (json?.data?.has_more) {
+			if (json.data.has_more === true || (json.data.has_more === undefined && json.data.items.length === limit)) {
 				hasMore = true;
 				offset += limit;
 			} else {
@@ -277,15 +285,22 @@ export class SynologyClient {
 		return lastResponse;
 	}
 
+	async hasFile(path: string): Promise<boolean> {
+        const slash = path.lastIndexOf('/');
+        const name = path.slice(slash + 1);
+        const response = await this.listFiles(path.slice(0, slash)) as { data: { items: Array<{ name: string }> } };
+        return response.data.items.some(item => item.name === name);
+    }
+
 	/**
 	 * 创建文件夹
 	 */
-	async createFolder(path: string): Promise<unknown> {
+	async createFolder(path: string, conflictAction: 'overwrite' | 'stop' = 'overwrite'): Promise<unknown> {
 		const endpoint = '/api/SynologyDrive/default/v2/files';
 		const url = new URL(this.baseUrl + endpoint);
 		url.searchParams.append('type', 'folder');
 		url.searchParams.append('path', path);
-		url.searchParams.append('conflict_action', 'overwrite'); // 避免同名目录报错
+		url.searchParams.append('conflict_action', conflictAction);
 		if (this.sid) url.searchParams.append('_sid', this.sid);
 
 		let req: RequestUrlParam = {
@@ -300,7 +315,7 @@ export class SynologyClient {
 		if (this.sid) req.headers!['Cookie'] = `id=${this.sid};`;
 		req.body = "{}"; // 创建文件夹不需要 body
 
-		const res = await this.safeRequestUrl(req);
+		const res = await this.safeRequestUrl(req, conflictAction === 'stop' ? 1 : 3);
 		if (res.status >= 400) {
 			const json = res.json as ApiResponse | null;
 			const errText = (json && json.error ? `API Error Code: ${json.error.code}` : res.text) || `HTTP ${res.status}`;
@@ -313,6 +328,7 @@ export class SynologyClient {
 			throw new Error(`API Error Code: ${code}`);
 		}
 		
+		if (json?.success !== true) throw new Error(t('safety.invalidResponse'));
 		return res.json;
 	}
 
@@ -407,6 +423,7 @@ export class SynologyClient {
 			throw new Error(`API Error Code: ${code || 'Unknown'} (File: ${path})`);
 		}
 		
+		if (json?.success !== true) throw new Error(t('safety.invalidResponse'));
 		return res.json;
 	}
 
@@ -523,6 +540,8 @@ export class SynologyClient {
 				throw new Error(`API Error Code: ${code} - ${apiRes.error?.errors?.message || 'search failed'}`);
 			}
 			
+			if (json?.success !== true || !json.data || !Array.isArray(json.data.items)) throw new Error(t('safety.invalidResponse'));
+			if (json.data.items.some(item => !item || typeof item !== 'object' || !('name' in item) || typeof item.name !== 'string')) throw new Error(t('safety.invalidResponse'));
 			lastResponse = json;
 			
 			if (json?.data?.items && Array.isArray(json.data.items)) {

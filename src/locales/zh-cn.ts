@@ -1,4 +1,16 @@
 export default {
+	'safety.invalidResponse': 'NAS 返回无效响应，已停止同步。',
+	'safety.invalidManifest': "同步元数据无效，已停止同步以保护文件。",
+	'safety.locked': "同步已锁定。若所有设备均已停止同步，请查看 README 链接的同步与恢复指南。",
+	'safety.hashMismatch': "文件内容与记录的哈希不一致，已停止同步；请重新执行全量同步。",
+	'safety.pending': "远端有未完成的操作，需恢复后再同步。",
+	'safety.localChanged': "文件在同步期间发生变化：{{path}}。请重试以保留最新编辑。",
+	'safety.copyExists': "恢复路径已有不同内容的文件：{{path}}，未覆盖该文件。",
+	'safety.conflictPreserved': "冲突已处理，不同版本的内容已保留。",
+	'safety.busy': "已有同步正在运行。",
+	'safety.massDelete': "已阻止批量删除。请检查并恢复被删除的文件后重试。",
+	'safety.largeFile': "同步已停止：文件超过 50 MB 限制：{{path}}。",
+
 	'plugin.name': 'Synology Sync',
 
 	// main.ts commands & notices
@@ -63,19 +75,19 @@ export default {
 	'settings.dangerZone': '危险操作 (Danger Zone) / 首次初始化',
 	'settings.dangerZone.desc': '以下操作涉及文件单向强制覆盖或状态清除，请谨慎操作。',
 	'settings.forceUpload.name': '强制全量上传 (覆盖群晖)',
-	'settings.forceUpload.desc': '以本地为准。强制清空远端额外文件，并将本地所有笔记推送到群晖。',
+	'settings.forceUpload.desc': "上传本地文件并保留远端不同版本，不删除仅存在于远端的文件。",
 	'settings.forceUpload.btn': '强制上传',
-	'settings.forceUpload.confirm': '警告：这会使用本地文件完全覆盖并重置群晖上的同步目录，您确定要执行吗？',
+	'settings.forceUpload.confirm': "上传本地文件并保留远端不同版本？仅存在于远端的文件将保留。",
 
 	'settings.forceDownload.name': '强制全量下载 (覆盖本地)',
-	'settings.forceDownload.desc': '以群晖为准。强制清空本地额外文件，并将群晖所有笔记拉取到本地。',
+	'settings.forceDownload.desc': "下载远端文件并保留本地不同版本，不删除仅存在于本地的文件。",
 	'settings.forceDownload.btn': '强制下载',
-	'settings.forceDownload.confirm': '警告：这会清空本地额外文件，并使用群晖文件完全覆盖本地库，您确定要执行吗？',
+	'settings.forceDownload.confirm': "下载远端文件并保留本地不同版本？仅存在于本地的文件将保留。",
 
 	'settings.rebuild.name': '构建同步基准 (重建状态)',
-	'settings.rebuild.desc': '适合已通过U盘手动拷贝的场景。清空现有同步状态，重新比对Hash并生成新的同步基准。',
+	'settings.rebuild.desc': "重新核验实际内容，安全重建本地同步快照。",
 	'settings.rebuild.btn': '重建状态',
-	'settings.rebuild.confirm': '确认要强制重建同步状态快照吗？',
+	'settings.rebuild.confirm': "核验两端实际内容并重建本地快照，同时保留不同版本？",
 
 	'settings.initialSync.title': '首次同步设置',
 	'settings.initialSync.desc': '这是您首次连接到此群晖。您希望如何初始化同步？',

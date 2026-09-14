@@ -1,4 +1,16 @@
 export default {
+	'safety.invalidResponse': 'The NAS returned an invalid response. Sync stopped.',
+	'safety.invalidManifest': "Sync metadata is invalid. Sync stopped to protect your files.",
+	'safety.locked': "Sync is locked. If all devices have stopped syncing, follow the sync and recovery guide linked from the README.",
+	'safety.hashMismatch': "File content does not match its recorded hash. Sync stopped; retry a full sync.",
+	'safety.pending': "An unfinished remote operation needs recovery before syncing.",
+	'safety.localChanged': "File changed during sync: {{path}}. Retry to preserve the latest edit.",
+	'safety.copyExists': "A different file already uses the recovery path: {{path}}. Nothing was overwritten.",
+	'safety.conflictPreserved': "Conflict resolved with the differing content preserved.",
+	'safety.busy': "A sync is already running.",
+	'safety.massDelete': "Bulk deletion blocked. Review deleted files and recover them before retrying.",
+	'safety.largeFile': "Sync stopped: file exceeds the 50 MB limit: {{path}}.",
+
 	'plugin.name': 'Synology Sync',
 
 	'command.uploadActive': 'Upload Active File to NAS',
@@ -61,19 +73,19 @@ export default {
 	'settings.dangerZone': 'Danger Zone / First-time Init',
 	'settings.dangerZone.desc': 'The following operations involve one-way forced overwriting of files or state clearing, please proceed with caution.',
 	'settings.forceUpload.name': 'Force Full Upload (Overwrite NAS)',
-	'settings.forceUpload.desc': 'Local truth. Voids remote extra files, pushes all local notes to NAS.',
+	'settings.forceUpload.desc': "Upload local files, preserving different remote versions. Does not delete remote-only files.",
 	'settings.forceUpload.btn': 'Force Upload',
-	'settings.forceUpload.confirm': 'WARNING: This will completely overwrite and reset the NAS sync folder with local files. Are you sure?',
+	'settings.forceUpload.confirm': "Upload local files and preserve different remote versions? Remote-only files will remain.",
 
 	'settings.forceDownload.name': 'Force Full Download (Overwrite Local)',
-	'settings.forceDownload.desc': 'Remote truth. Voids local extra files, pulls all NAS notes locally.',
+	'settings.forceDownload.desc': "Download remote files, preserving different local versions. Does not delete local-only files.",
 	'settings.forceDownload.btn': 'Force Download',
-	'settings.forceDownload.confirm': 'WARNING: This will delete local extra files and completely overwrite the local vault with NAS files. Are you sure?',
+	'settings.forceDownload.confirm': "Download remote files and preserve different local versions? Local-only files will remain.",
 
 	'settings.rebuild.name': 'Rebuild Sync Base',
-	'settings.rebuild.desc': 'Used after manual USB copy. Drops current sync state and builds a new baseline via hash checks.',
+	'settings.rebuild.desc': "Recheck actual contents and safely rebuild local sync snapshots.",
 	'settings.rebuild.btn': 'Rebuild State',
-	'settings.rebuild.confirm': 'Are you sure you want to forcibly rebuild the sync state snapshot?',
+	'settings.rebuild.confirm': "Recheck both sides and rebuild local snapshots, preserving differing contents?",
 
 	'settings.initialSync.title': 'First Time Sync Setup',
 	'settings.initialSync.desc': 'This is your first time connecting to this NAS. How do you want to initialize the sync?',

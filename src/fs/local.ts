@@ -1,4 +1,5 @@
 import { App, TFile } from 'obsidian';
+import { t } from '../locales';
 
 export class LocalFS {
 	private app: App;
@@ -34,6 +35,32 @@ export class LocalFS {
 			await this.app.vault.createBinary(path, data);
 		}
 	}
+
+    /** Compare and replace text inside Obsidian's atomic process callback. */
+    async writeChecked(path: string, data: ArrayBuffer, expected: ArrayBuffer | null): Promise<void> {
+        const file = this.app.vault.getAbstractFileByPath(path);
+        if (file instanceof TFile && expected !== null) {
+            const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+            let previous: string;
+            let next: string;
+            try { previous = decoder.decode(expected); next = decoder.decode(data); }
+            catch {
+                // Obsidian exposes no atomic binary compare-and-replace; caller checks and preserves versions.
+                await this.write(path, data);
+                return;
+            }
+            await this.app.vault.process(file, current => {
+                if (current !== previous) throw new Error(t('safety.localChanged', { path }));
+                return next;
+            });
+        } else {
+            if (file || expected !== null) throw new Error(t('safety.localChanged', { path }));
+            // createBinary rejects an existing path rather than overwriting it.
+            const parent = path.substring(0, path.lastIndexOf('/'));
+            if (parent) await this.ensureFolder(parent);
+            await this.app.vault.createBinary(path, data);
+        }
+    }
 
 	/**
 	 * 删除本地文件或目录

@@ -22,6 +22,8 @@ Sync your Obsidian vault with your Synology NAS via the **Official Synology Driv
 3. Enter your Synology username and password.
 4. Test the connection and start syncing!
 
+See the [sync and recovery guide](docs/sync-guide.md) for usage details, or the [development guide](docs/development.md) to build and test the plugin.
+
 ### Disclaimer
 
 **Important Notice & Trademark Disclaimer**:

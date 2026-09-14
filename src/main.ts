@@ -5,6 +5,7 @@ import {
 	SynologySyncSettingTab,
 } from './settings';
 import { t } from './locales';
+import { DeletionTracker } from './sync/deletions';
 
 
 import type { SyncLogger } from './sync/logger';
@@ -17,6 +18,10 @@ type SyncUIState =
 	| 'error';
 
 export default class SynologySyncPlugin extends Plugin {
+	private deletions = new DeletionTracker();
+	private syncTarget = '';
+	private ready = false;
+	private unloaded = false;
 	settings!: SynologySyncSettings;
 	public logger!: SyncLogger;
 	private statusBarItem!: HTMLElement;
@@ -163,8 +168,14 @@ export default class SynologySyncPlugin extends Plugin {
 		// 监听本地文件变更，防抖触发同步 (3秒)
 		this.registerEvent(this.app.vault.on('modify', (file) => this.triggerAutoSync(file)));
 		this.registerEvent(this.app.vault.on('create', (file) => this.triggerAutoSync(file)));
-		this.registerEvent(this.app.vault.on('delete', (file) => this.triggerAutoSync(file)));
-		this.registerEvent(this.app.vault.on('rename', (file) => this.triggerAutoSync(file)));
+		this.registerEvent(this.app.vault.on('delete', (file) => {
+			if (this.ready && !this.isSyncing) this.deletions.deleted(file.path);
+			this.triggerAutoSync(file);
+		}));
+		this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
+			if (this.ready && !this.isSyncing) this.deletions.deleted(oldPath);
+			this.triggerAutoSync(file);
+		}));
 
 		// 定时轮询远端变更 (每 30 秒一次 Quick Sync)
 		this.registerInterval(
@@ -173,10 +184,12 @@ export default class SynologySyncPlugin extends Plugin {
 			}, 30 * 1000)
 		);
 
-		// 启动时执行一次全量同步 (Full Sync) 探测远端删除，为了不阻塞，延迟执行
-		window.setTimeout(() => {
+		// 等待库布局就绪后执行全量核验，避免固定延迟与启动扫描竞争。
+		this.app.workspace.onLayoutReady(() => {
+			if (this.unloaded) return;
+			this.ready = true;
 			void this.runEngineSync(true);
-		}, 2000);
+		});
 		
 		// 同步引擎命令
 		this.addCommand({
@@ -220,6 +233,7 @@ export default class SynologySyncPlugin extends Plugin {
 	}
 
 	triggerAutoSync(file?: TAbstractFile) {
+		if (!this.ready || this.unloaded || this.isSyncing) return;
 		// 忽略 Obsidian 自身的配置和插件产生的变更（比如我们自己的 sync_data.json），否则会陷入无限循环同步
 		if (file && file.path && file.path.startsWith(this.app.vault.configDir + '/')) {
 			return;
@@ -260,11 +274,14 @@ export default class SynologySyncPlugin extends Plugin {
 		client.debugMode = this.settings.debugMode ?? false;
 		(client as unknown as { sid: string }).sid = sid;
 
-		const state = new SyncState(this.app, this.manifest.dir!);
-		return new SyncEngine(this.app, client, state, this.logger, syncFolder);
+		const target = client.getSyncTarget(syncFolder);
+		if (target !== this.syncTarget) { this.deletions = new DeletionTracker(); this.syncTarget = target; }
+		const state = new SyncState(this.app, this.manifest.dir!, target);
+		return new SyncEngine(this.app, client, state, this.logger, syncFolder, this.deletions);
 	}
 
 	async runEngineSync(fullScan: boolean, showNotice: boolean = false) {
+		if (!this.ready || this.unloaded) return;
 		if (this.isSyncing) {
 			if (showNotice) new Notice(t('notice.engine.syncing'));
 			return;
@@ -311,11 +328,14 @@ export default class SynologySyncPlugin extends Plugin {
 
 
 	onunload() {
-		// 插件卸载时的清理逻辑
+		this.unloaded = true;
+		this.ready = false;
+		if (this.syncTimeout) window.clearTimeout(this.syncTimeout);
+		if (this.uiResetTimer) window.clearTimeout(this.uiResetTimer);
 	}
 
 	async doForceUpload() {
-		if (this.isSyncing) return;
+		if (!this.ready || this.unloaded || this.isSyncing) return;
 		try {
 			this.isSyncing = true;
 			this.updateStatusBar('force-uploading');
@@ -337,7 +357,7 @@ export default class SynologySyncPlugin extends Plugin {
 	}
 
 	async doForceDownload() {
-		if (this.isSyncing) return;
+		if (!this.ready || this.unloaded || this.isSyncing) return;
 		try {
 			this.isSyncing = true;
 			this.updateStatusBar('force-downloading');
@@ -359,7 +379,7 @@ export default class SynologySyncPlugin extends Plugin {
 	}
 
 	async doRebuildSyncState() {
-		if (this.isSyncing) return;
+		if (!this.ready || this.unloaded || this.isSyncing) return;
 		try {
 			this.isSyncing = true;
 			this.updateStatusBar('rebuilding');
@@ -379,101 +399,29 @@ export default class SynologySyncPlugin extends Plugin {
 		}
 	}
 
-	async uploadActiveFile() {
-		const activeFile = this.app.workspace.getActiveFile();
-		if (!activeFile) {
-			new Notice(t('notice.noActiveFile'));
-			return;
-		}
+	async uploadActiveFile() { await this.transferActiveFile('upload'); }
 
-		let notice: Notice | null = null;
-		try {
-			const { SynologyClient } = await import('./api/client');
-			const { nasUrl, username, password, sid, syncFolder } = this.settings;
-			if (!sid) {
-				new Notice(t('notice.loginRequired'));
-				return;
-			}
+	async downloadActiveFile() { await this.transferActiveFile('download'); }
 
-			const client = new SynologyClient(nasUrl, username, password);
-			client.debugMode = this.settings.debugMode ?? false;
-			(client as unknown as { sid: string }).sid = sid; // 注入现有的 sid
-
-			// 读取文件内容为二进制
-			const buffer = await this.app.vault.readBinary(activeFile);
-
-			let targetPath = `${syncFolder}/${activeFile.path}`;
-			if (!targetPath.startsWith('/mydrive/') && !targetPath.startsWith('/team-folders/')) {
-				targetPath = `/mydrive${targetPath.startsWith('/') ? '' : '/'}${targetPath}`;
-			}
-			// 移除可能存在的双斜杠
-			targetPath = targetPath.replace(/\/\//g, '/');
-
-			const n = new Notice(t('notice.uploading', { targetPath }), 0);
-			notice = n;
-			await client.uploadFile(targetPath, buffer);
-			n.setMessage(t('notice.uploadSuccess'));
-			window.setTimeout(() => n.hide(), 3000);
-			this.app.workspace.trigger('synology-sync:sync-completed');
-		} catch (err: unknown) {
-			const errorMsg = err instanceof Error ? err.message : String(err);
-			const n = notice;
-			if (n) {
-				n.setMessage(t('notice.uploadFailed', { error: errorMsg }));
-				window.setTimeout(() => n.hide(), 5000);
-			} else {
-				new Notice(t('notice.uploadFailed', { error: errorMsg }));
-			}
-		}
-	}
-
-	async downloadActiveFile() {
-		const activeFile = this.app.workspace.getActiveFile();
-		if (!activeFile) {
-			new Notice(t('notice.noActiveFileToDefine'));
-			return;
-		}
-
-		let notice: Notice | null = null;
-		try {
-			const { SynologyClient } = await import('./api/client');
-			const { LocalFS } = await import('./fs/local');
-			const { nasUrl, username, password, sid, syncFolder } = this.settings;
-			if (!sid) {
-				new Notice(t('notice.loginRequired'));
-				return;
-			}
-
-			const client = new SynologyClient(nasUrl, username, password);
-			client.debugMode = this.settings.debugMode ?? false;
-			(client as unknown as { sid: string }).sid = sid;
-
-			let targetPath = `${syncFolder}/${activeFile.path}`;
-			if (!targetPath.startsWith('/mydrive/') && !targetPath.startsWith('/team-folders/')) {
-				targetPath = `/mydrive${targetPath.startsWith('/') ? '' : '/'}${targetPath}`;
-			}
-			targetPath = targetPath.replace(/\/\//g, '/');
-
-			const n = new Notice(t('notice.downloading', { targetPath }), 0);
-			notice = n;
-			const buffer = await client.downloadFile(targetPath);
-			const localFs = new LocalFS(this.app);
-			await localFs.write(activeFile.path, buffer);
-			
-			n.setMessage(t('notice.downloadSuccess'));
-			window.setTimeout(() => n.hide(), 3000);
-			this.app.workspace.trigger('synology-sync:sync-completed');
-		} catch (err: unknown) {
-			const errorMsg = err instanceof Error ? err.message : String(err);
-			const n = notice;
-			if (n) {
-				n.setMessage(t('notice.downloadFailed', { error: errorMsg }));
-				window.setTimeout(() => n.hide(), 5000);
-			} else {
-				new Notice(t('notice.downloadFailed', { error: errorMsg }));
-			}
-		}
-	}
+	private async transferActiveFile(direction: 'upload' | 'download') {
+        if (!this.ready || this.unloaded || this.isSyncing) return;
+        const file = this.app.workspace.getActiveFile();
+        if (!file) { new Notice(t('notice.noActiveFile')); return; }
+        this.isSyncing = true;
+        this.updateStatusBar('syncing');
+        try {
+            const engine = await this.getEngine();
+            await engine.syncFile(file.path, direction);
+            this.settings.lastSyncTime = Date.now();
+            await this.saveSettings();
+            this.updateStatusBar('idle');
+            new Notice(t('notice.engine.syncSuccess'));
+            this.app.workspace.trigger('synology-sync:sync-completed');
+        } catch (error) {
+            this.updateStatusBar('error');
+            new Notice(t('notice.syncException', { error: error instanceof Error ? error.message : String(error) }));
+        } finally { this.isSyncing = false; }
+    }
 
 	async loadSettings() {
 		this.settings = Object.assign(

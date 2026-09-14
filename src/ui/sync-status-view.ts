@@ -70,7 +70,12 @@ export class SyncStatusView extends ItemView {
 
         const loadingEl = contentEl.createDiv({ text: t('ui.statusView.loading'), cls: 'sync-status-loading' });
 
-        await this.syncState.load();
+        const stateClient = await this.plugin.getClient();
+        this.syncState = new SyncState(this.app, this.plugin.manifest.dir!, stateClient.getSyncTarget(this.plugin.settings.syncFolder));
+        try { await this.syncState.load(); } catch {
+            loadingEl.setText(t('safety.invalidManifest'));
+            return;
+        }
         const localEntry = this.syncState.getFileState(activeFile.path);
         
         const localMtime = activeFile.stat.mtime;

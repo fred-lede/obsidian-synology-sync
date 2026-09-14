@@ -19,7 +19,8 @@ export interface SyncPlan {
 export function computeSyncPlan(
     localFiles: Map<string, LocalFileInfo>,
     snapshots: Map<string, LocalFileEntry>,
-    manifests: Map<string, ManifestEntry>
+    manifests: Map<string, ManifestEntry>,
+    confirmedDeletions: ReadonlySet<string> = new Set()
 ): SyncPlan {
     const plan: SyncPlan = {
         uploads: new Set(),
@@ -52,6 +53,26 @@ export function computeSyncPlan(
 
         const localDeleted = !localExists && snapshotExists;
         const remoteDeleted = snapshotExists && manifest && manifest.deleted === true && manifest.rev > snapshot.syncedRev;
+
+        // An absence is not evidence of deletion on a copied, offline or partially loaded vault.
+        if (localDeleted && manifestExists && !confirmedDeletions.has(path)) {
+            plan.downloads.add(path);
+            continue;
+        }
+        if (localDeleted && (!manifest || manifest.deleted)) {
+            plan.snapshotClears.add(path);
+            continue;
+        }
+        if (manifest?.deleted && local && !snapshot) {
+            // Unknown local content must be preserved and explicitly resolved.
+            plan.conflicts.add(path);
+            continue;
+        }
+
+        if (localExists && snapshotExists && !manifest) {
+            plan.uploads.add(path);
+            continue;
+        }
 
         // 1. localExists && !snapshotExists && !manifestExists -> Upload
         if (localExists && !snapshotExists && !manifestExists) {
@@ -123,13 +144,13 @@ export function computeSyncPlan(
 
         // 9. localDeleted && remoteChanged -> Conflict (recover remote)
         if (localDeleted && remoteChanged) {
-            plan.conflicts.add(path);
+            plan.downloads.add(path);
             continue;
         }
 
         // 10. localChanged && remoteDeleted -> Conflict (recover local)
         if (localChanged && remoteDeleted) {
-            plan.conflicts.add(path);
+            plan.uploads.add(path);
             continue;
         }
 

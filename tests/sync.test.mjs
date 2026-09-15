@@ -38,7 +38,7 @@ const json = value => bytes(JSON.stringify(value));
 
 class Remote {
     files = new Map();
-    folders = new Set([root]);
+    folders = new Set(['/mydrive',root]);
     writes = [];
     fail = null;
     async ensureRemoteFolder(path) { this.folders.add(path); }
@@ -407,4 +407,38 @@ test('partial lock listing cannot be reported as missing',async()=>{
     const r=new Remote();r.listFiles=async()=>({success:true,data:{total:1,items:[]}});
     const error=await diagnoseLockRead(r,root+'/.sync_lock/owner.json',Error('HTTP 400'));
     assert.match(error.message,/unable to determine/);
+});
+
+test('new and nested uploads preserve all remote contents when folder overwrite is destructive',async()=>{
+    const r=new Remote();await seed(r,'remote.md','keep');
+    const create=r.createFolder.bind(r);const calls=[];
+    r.createFolder=async(path,action='overwrite')=>{
+        calls.push([path,action]);
+        if(action==='overwrite'&&r.folders.has(path))await r.deleteFile(path);
+        return create(path,action);
+    };
+    // Model the legacy ensure helper faithfully: every ancestor is created with overwrite.
+    r.ensureRemoteFolder=async path=>{
+        const parts=path.split('/').filter(Boolean);let current='';
+        for(const part of parts){current+='/'+part;if(current!=='/mydrive')await r.createFolder(current);}
+    };
+    const d=device(r,{'new.md':'new','sub/nested.md':'nested'});
+    await d.sync();
+    assert.equal(text(r.files.get(root+'/remote.md')),'keep');
+    assert.equal(text(r.files.get(root+'/new.md')),'new');assert.equal(text(r.files.get(root+'/sub/nested.md')),'nested');
+    assert.ok(calls.length>0);assert.ok(calls.every(([,action])=>action==='stop'));
+    assert.equal(r.folders.has(root+'/.sync_lock'),false);
+});
+test('sync uploads disable the legacy overwrite-parents fallback',async()=>{
+    const r=new Remote();let retryFlag;
+    r.uploadFile=async(path,buffer,isRetry)=>{retryFlag=isRetry;throw Error('API Error Code: 1000');};
+    await assert.rejects(withRemoteDiagnostics(r).uploadFile(root+'/a.md',bytes('A')),/1000/);
+    assert.equal(retryFlag,true);
+});
+test('safe folder preparation does not replace a file or ignore an unreadable listing',async()=>{
+    const r=new Remote();r.files.set(root+'/same',bytes('keep'));
+    await assert.rejects(withRemoteDiagnostics(r).ensureRemoteFolder(root+'/same'));
+    assert.equal(text(r.files.get(root+'/same')),'keep');
+    r.listFiles=async()=>{throw Error('API Error Code: 1003');};
+    await assert.rejects(withRemoteDiagnostics(r).ensureRemoteFolder(root),/1003/);
 });

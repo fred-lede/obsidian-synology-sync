@@ -12,6 +12,7 @@ import { PlanExecutor } from './executor';
 import { scanRemote } from './remote-scan';
 import { validPath } from './validation';
 import { normalizeRemoteFolder } from '../api/paths';
+import { withRemoteDiagnostics } from './remote-diagnostics';
 
 type Mode = 'sync' | 'upload' | 'download' | 'rebuild';
 
@@ -23,10 +24,11 @@ export class SyncEngine {
 
     constructor(private app: App, private client: SynologyClient, private state: SyncState,
         private logger: SyncLogger, private remoteFolder: string, private deletions = new DeletionTracker()) {
+        this.client = withRemoteDiagnostics(client);
         this.remoteFolder = normalizeRemoteFolder(remoteFolder);
-        this.manager = new ManifestManager(client, this.remoteFolder);
-        this.transaction = new RemoteTransaction(client, this.manager, this.remoteFolder);
-        this.executor = new PlanExecutor(app, client, state, logger, this.manager, this.transaction, this.remoteFolder);
+        this.manager = new ManifestManager(this.client, this.remoteFolder);
+        this.transaction = new RemoteTransaction(this.client, this.manager, this.remoteFolder);
+        this.executor = new PlanExecutor(app, this.client, state, logger, this.manager, this.transaction, this.remoteFolder);
     }
 
     async runSync(fullScan = false, showNotice = false): Promise<boolean> {
@@ -43,6 +45,9 @@ export class SyncEngine {
         this.isSyncing = true;
         let locked = false;
         let deviceId = '';
+        let failed = false;
+        let failure: unknown;
+        let result = false;
         try {
             await this.state.load();
             deviceId = this.state.getDeviceId();
@@ -87,14 +92,30 @@ export class SyncEngine {
             for (const path of [...plan.deletionsRemote, ...plan.deletionsLocal, ...plan.downloads, ...plan.snapshotClears]) this.deletions.complete(path);
             this.deletions.observe(local.keys());
             this.deletions.observe(plan.downloads);
-            return changed || JSON.stringify(manifest) !== beforeScan;
+            result = changed || JSON.stringify(manifest) !== beforeScan;
         } catch (error) {
+            failed = true;
+            failure = error;
+            await this.recordError(error);
+        } finally {
+            try {
+                if (locked) await this.manager.releaseLock(deviceId);
+            } catch (releaseError) {
+                await this.recordError(releaseError);
+                // Cleanup must not replace the error that actually interrupted synchronization.
+                if (!failed) { failed = true; failure = releaseError; }
+            } finally { this.isSyncing = false; }
+        }
+        if (failed) throw failure;
+        return result;
+    }
+
+    private async recordError(error: unknown): Promise<void> {
+        try {
             await this.logger.addLog({ action: 'Error', file: '', details: error instanceof Error ? error.message : String(error) });
             await this.logger.flush();
-            throw error;
-        } finally {
-            try { if (locked) await this.manager.releaseLock(deviceId); }
-            finally { this.isSyncing = false; }
+        } catch (loggingError) {
+            console.error('[SynologySync] Failed to persist error log', loggingError);
         }
     }
 

@@ -1,4 +1,13 @@
 export default {
+	'sync.operationFailed': "{{operation}}失败（{{path}}）：{{error}}",
+	'sync.operation.createFolder': "创建目录",
+	'sync.operation.createLock': "创建同步锁",
+	'sync.operation.prepareFolder': "准备远端目录",
+	'sync.operation.upload': "上传文件",
+	'sync.operation.download': "下载文件",
+	'sync.operation.delete': "删除远端条目",
+	'sync.operation.list': "列出目录",
+
 	'safety.recordReadFailed': '无法读取同步记录 {{path}}：{{error}}',
 	'api.metadataFailed': "无法查询远端文件 {{path}}：{{error}}",
 	'api.listFailed': "无法列出远端目录 {{path}}：{{error}}",

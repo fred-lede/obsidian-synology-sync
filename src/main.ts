@@ -318,6 +318,7 @@ export default class SynologySyncPlugin extends Plugin {
 			}
 			this.app.workspace.trigger('synology-sync:sync-completed');
 		} catch (err: unknown) {
+			console.error('[SynologySync] Sync Error', err);
 			const errorMsg = err instanceof Error ? err.message : String(err);
 			this.updateStatusBar('error');
 			if (syncNotice) syncNotice.hide();

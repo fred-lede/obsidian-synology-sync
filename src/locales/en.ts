@@ -1,4 +1,13 @@
 export default {
+	'sync.operationFailed': "Failed to {{operation}} ({{path}}): {{error}}",
+	'sync.operation.createFolder': "create folder",
+	'sync.operation.createLock': "create sync lock",
+	'sync.operation.prepareFolder': "prepare remote folder",
+	'sync.operation.upload': "upload file",
+	'sync.operation.download': "download file",
+	'sync.operation.delete': "delete remote entry",
+	'sync.operation.list': "list folder",
+
 	'safety.recordReadFailed': 'Could not read sync record {{path}}: {{error}}',
 	'api.metadataFailed': "Could not query remote file {{path}}: {{error}}",
 	'api.listFailed': "Could not list remote folder {{path}}: {{error}}",

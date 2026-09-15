@@ -2,6 +2,8 @@ import { SynologyClient } from '../api/client';
 import { isHash, record, validPath } from './validation';
 import { t } from '../locales';
 import { readRemoteRecord } from './remote-access';
+import { SyncOperationError } from './remote-diagnostics';
+import { diagnoseLockRead } from './lock-diagnostics';
 
 export interface ManifestEntry {
     rev: number;
@@ -56,8 +58,24 @@ export class ManifestManager {
 
     async assertLock(): Promise<void> {
         if (!this.token) throw new Error(t('safety.locked'));
-        const owner = new TextDecoder().decode(await this.client.downloadFile(this.path('.sync_lock/owner.json')));
+        const owner = new TextDecoder().decode(await this.readLockOwner());
         if (owner !== this.token) throw new Error(t('safety.locked'));
+    }
+
+    private async readLockOwner(): Promise<ArrayBuffer> {
+        for (let attempt = 0; ; attempt++) {
+            try {
+                return await this.client.downloadFile(this.path('.sync_lock/owner.json'));
+            } catch (error) {
+                const original = error instanceof SyncOperationError ? error.originalError : error;
+                // Some lock reads fail with a bare HTTP 400 after earlier reads succeeded.
+                // Retry only this read, never a mutation or a specific API/authentication error.
+                const bare400 = original instanceof Error && /^HTTP\s*:?\s*400(?:\s*:\s*HTTP\s*:?\s*400)?\s*$/i.test(original.message);
+                if (!bare400) throw error;
+                if (attempt >= 2) throw await diagnoseLockRead(this.client, this.path('.sync_lock/owner.json'), error);
+                await new Promise<void>(resolve => window.setTimeout(resolve, 500 * (attempt + 1)));
+            }
+        }
     }
 
     async releaseLock(_deviceId: string): Promise<void> {

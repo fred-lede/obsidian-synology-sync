@@ -1,5 +1,8 @@
 export default {
 	'sync.operationFailed': "{{operation}}失败（{{path}}）：{{error}}",
+	'sync.lockRead.present': "锁检查：目录中列出了 owner.json，但下载失败。同步已停止。",
+	'sync.lockRead.notListed': "锁检查：锁目录中未列出 owner.json。同步已停止，未重建锁。",
+	'sync.lockRead.unknown': "锁检查：无法确定 owner.json 是否存在：{{error}}",
 	'sync.operation.createFolder': "创建目录",
 	'sync.operation.createLock': "创建同步锁",
 	'sync.operation.prepareFolder': "准备远端目录",

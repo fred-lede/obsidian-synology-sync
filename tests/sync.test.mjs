@@ -14,6 +14,7 @@ export {TFile} from 'obsidian';
 export {SynologyClient} from './src/api/client';
 export {normalizeRemoteFolder,remoteFilePath} from './src/api/paths';
 export {listRemoteFiles,readRemoteRecord} from './src/sync/remote-access';
+export {diagnoseLockRead} from './src/sync/lock-diagnostics';
 export {withRemoteDiagnostics} from './src/sync/remote-diagnostics';`, resolveDir: process.cwd() },
     bundle: true, format: 'esm', platform: 'node', write: false,
     plugins: [{ name: 'obsidian-double', setup(b) {
@@ -25,8 +26,9 @@ export const getLanguage=()=> 'en';
 export const requestUrl=(req)=>globalThis.mockRequest(req);` }));
     } }]
 });
-const {SyncEngine, SyncState, ManifestManager, DeletionTracker, computeSyncPlan, TFile, SynologyClient, normalizeRemoteFolder, remoteFilePath, listRemoteFiles, readRemoteRecord, withRemoteDiagnostics} = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const {SyncEngine, SyncState, ManifestManager, DeletionTracker, computeSyncPlan, TFile, SynologyClient, normalizeRemoteFolder, remoteFilePath, listRemoteFiles, readRemoteRecord, withRemoteDiagnostics, diagnoseLockRead} = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 globalThis.crypto ??= webcrypto;
+globalThis.window ??= {setTimeout};
 Error.stackTraceLimit = 3;
 const bytes = text => new TextEncoder().encode(text).buffer;
 const text = buffer => new TextDecoder().decode(buffer);
@@ -353,4 +355,56 @@ test('diagnostics preserve API arguments and original failure without extra requ
     r.createFolder=async(...args)=>{calls.push(args);throw originalError;};
     await assert.rejects(withRemoteDiagnostics(r).createFolder(root+'/.sync_lock','stop'),error=>{assert.equal(error.originalError,originalError);return true;});
     assert.deepEqual(calls,[[root+'/.sync_lock','stop']]);
+});
+
+test('lock verification recovers from a bare HTTP 400 without recreating its owner',async()=>{
+    const r=new Remote();const m=new ManifestManager(withRemoteDiagnostics(r),root);await m.acquireLock('A');
+    const writes=r.writes.length;let reads=0;
+    r.fail=(operation,path)=>{if(operation==='download'&&path===root+'/.sync_lock/owner.json'&&++reads<3)throw Error('HTTP 400: HTTP 400');};
+    await m.assertLock();assert.equal(reads,3);assert.equal(r.writes.length,writes);
+});
+test('persistent lock read failure retains the lock and blocks publication',async()=>{
+    const r=new Remote();const m=new ManifestManager(withRemoteDiagnostics(r),root);await m.acquireLock('A');
+    const original=Error('HTTP 400');let reads=0;
+    r.fail=(operation)=>{if(operation==='download'){reads++;throw original;}};
+    await assert.rejects(m.uploadManifest({schemaVersion:1,files:{}},'A'),error=>error.originalError.originalError===original && /owner.json is listed/.test(error.message));
+    assert.equal(reads,3);assert.equal(r.files.has(root+'/.sync_manifest.json'),false);assert.equal(r.folders.has(root+'/.sync_lock'),true);
+});
+test('ownership mismatch after a retry still blocks publication',async()=>{
+    const r=new Remote();const m=new ManifestManager(r,root);await m.acquireLock('A');let reads=0;
+    r.fail=(operation)=>{if(operation==='download'&&++reads===1){r.files.set(root+'/.sync_lock/owner.json',bytes('other'));throw Error('HTTP 400');}};
+    await assert.rejects(m.uploadManifest({schemaVersion:1,files:{}},'A'));
+    assert.equal(reads,2);assert.equal(r.files.has(root+'/.sync_manifest.json'),false);
+});
+test('authentication and specific API errors are not retried by lock verification',async()=>{
+    for(const message of ['HTTP 401: API Error Code: 1002','HTTP 400: API Error Code: 1003']){
+        const r=new Remote();const m=new ManifestManager(withRemoteDiagnostics(r),root);await m.acquireLock('A');let reads=0;
+        r.fail=(operation)=>{if(operation==='download'){reads++;throw Error(message);}};
+        await assert.rejects(m.assertLock());assert.equal(reads,1);
+    }
+});
+test('mid-transaction lock read HTTP 400 resumes and commits the uploaded content',async()=>{
+    const r=new Remote();const d=device(r,{'a.md':'A'});let pending=false;let failures=0;
+    r.fail=(operation,path)=>{
+        if(operation==='upload'&&path===root+'/.sync_pending_data')pending=true;
+        if(pending&&operation==='download'&&path===root+'/.sync_lock/owner.json'&&failures===0){failures++;throw Error('HTTP 400');}
+    };
+    await d.sync();assert.equal(failures,1);assert.equal(text(r.files.get(root+'/a.md')),'A');
+    assert.equal(r.manifest().files['a.md'].hash,await hash(bytes('A')));
+    assert.equal(r.folders.has(root+'/.sync_lock'),false);assert.equal(r.files.has(root+'/.sync_pending.json'),false);
+});
+test('missing lock owner is reported without recreating any remote entry',async()=>{
+    const r=new Remote();const original=Error('HTTP 400');
+    const error=await diagnoseLockRead(r,root+'/.sync_lock/owner.json',original);
+    assert.match(error.message,/owner.json is not listed/);assert.equal(error.originalError,original);assert.deepEqual(r.writes,[]);
+});
+test('failed lock listing reports unknown existence and retains both errors',async()=>{
+    const r=new Remote();r.listFiles=async()=>{throw Error('API Error Code: 1003');};
+    const error=await diagnoseLockRead(r,root+'/.sync_lock/owner.json',Error('HTTP 400'));
+    assert.match(error.message,/HTTP 400/);assert.match(error.message,/unable to determine/);assert.match(error.message,/1003/);
+});
+test('partial lock listing cannot be reported as missing',async()=>{
+    const r=new Remote();r.listFiles=async()=>({success:true,data:{total:1,items:[]}});
+    const error=await diagnoseLockRead(r,root+'/.sync_lock/owner.json',Error('HTTP 400'));
+    assert.match(error.message,/unable to determine/);
 });

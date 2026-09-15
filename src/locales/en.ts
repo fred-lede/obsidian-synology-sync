@@ -1,5 +1,8 @@
 export default {
 	'sync.operationFailed': "Failed to {{operation}} ({{path}}): {{error}}",
+	'sync.lockRead.present': "Lock check: owner.json is listed, but downloading it failed. Sync stopped.",
+	'sync.lockRead.notListed': "Lock check: owner.json is not listed in the lock directory. Sync stopped; the lock was not recreated.",
+	'sync.lockRead.unknown': "Lock check: unable to determine whether owner.json exists: {{error}}",
 	'sync.operation.createFolder': "create folder",
 	'sync.operation.createLock': "create sync lock",
 	'sync.operation.prepareFolder': "prepare remote folder",

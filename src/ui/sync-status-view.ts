@@ -3,6 +3,7 @@ import type SynologySyncPlugin from '../main';
 import { SyncState } from '../sync/state';
 import { t } from '../locales';
 import { remoteFilePath } from '../api/paths';
+import { syncTarget } from '../sync/remote-access';
 
 interface RemoteMetadata {
     data?: {
@@ -73,8 +74,7 @@ export class SyncStatusView extends ItemView {
 
         const loadingEl = contentEl.createDiv({ text: t('ui.statusView.loading'), cls: 'sync-status-loading' });
 
-        const stateClient = await this.plugin.getClient();
-        this.syncState = new SyncState(this.app, this.plugin.manifest.dir!, stateClient.getSyncTarget(this.plugin.settings.syncFolder));
+        this.syncState = new SyncState(this.app, this.plugin.manifest.dir!, syncTarget(this.plugin.settings.nasUrl, this.plugin.settings.username, this.plugin.settings.syncFolder));
         try { await this.syncState.load(); } catch {
             loadingEl.setText(t('safety.invalidManifest'));
             return;
@@ -90,8 +90,9 @@ export class SyncStatusView extends ItemView {
             const client = await this.plugin.getClient();
             const { syncFolder } = this.plugin.settings;
             if (syncFolder) {
-                const targetPath = remoteFilePath(await client.resolveSyncFolder(syncFolder), activeFile.path);
-                remoteMetadata = (await client.getMetadata(targetPath)) as RemoteMetadata;
+                const targetPath = remoteFilePath(syncFolder, activeFile.path);
+                remoteMetadata = (await client.getMetadata(targetPath)) as RemoteMetadata | null;
+                if (remoteMetadata === null) remoteError = t('ui.statusView.remoteQueryFailed');
             }
         } catch (e) {
             remoteError = e instanceof Error ? e.message : String(e);

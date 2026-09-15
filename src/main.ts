@@ -6,6 +6,7 @@ import {
 } from './settings';
 import { t } from './locales';
 import { DeletionTracker } from './sync/deletions';
+import { syncTarget } from './sync/remote-access';
 
 
 import type { SyncLogger } from './sync/logger';
@@ -274,11 +275,10 @@ export default class SynologySyncPlugin extends Plugin {
 		client.debugMode = this.settings.debugMode ?? false;
 		(client as unknown as { sid: string }).sid = sid;
 
-		const target = client.getSyncTarget(syncFolder);
+		const target = syncTarget(nasUrl, username, syncFolder);
 		if (target !== this.syncTarget) { this.deletions = new DeletionTracker(); this.syncTarget = target; }
 		const state = new SyncState(this.app, this.manifest.dir!, target);
-		const remoteFolder = await client.resolveSyncFolder(syncFolder);
-		return new SyncEngine(this.app, client, state, this.logger, remoteFolder, this.deletions);
+		return new SyncEngine(this.app, client, state, this.logger, syncFolder, this.deletions);
 	}
 
 	async runEngineSync(fullScan: boolean, showNotice: boolean = false) {

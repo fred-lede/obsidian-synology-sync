@@ -1,6 +1,7 @@
 import { SynologyClient } from '../api/client';
 import { isHash, record, validPath } from './validation';
 import { t } from '../locales';
+import { readRemoteRecord } from './remote-access';
 
 export interface ManifestEntry {
     rev: number;
@@ -38,9 +39,9 @@ export class ManifestManager {
 
     async acquireLock(_deviceId: string): Promise<boolean> {
         await this.client.ensureRemoteFolder(this.remoteFolder);
-        if (await this.client.hasFile(this.path('.sync_lock'))) throw new Error(t('safety.locked'));
         // Documented create conflict_action=stop; no retry after an ambiguous create result.
-        await this.client.createFolder(this.path('.sync_lock'), 'stop');
+        const created = await this.client.createFolder(this.path('.sync_lock'), 'stop') as { success?: boolean } | null;
+        if (created?.success !== true) throw new Error(t('safety.invalidResponse'));
         this.token = crypto.randomUUID();
         try {
             await this.client.uploadFile(this.path('.sync_lock/owner.json'), new TextEncoder().encode(this.token).buffer);
@@ -66,8 +67,9 @@ export class ManifestManager {
     }
 
     async downloadManifest(): Promise<SyncManifest> {
-        if (!await this.client.hasFile(this.path('.sync_manifest.json'))) return { schemaVersion: 1, files: {} };
-        const parsed: unknown = JSON.parse(new TextDecoder().decode(await this.client.downloadFile(this.path('.sync_manifest.json'))));
+        const buffer = await readRemoteRecord(this.client, this.path('.sync_manifest.json'));
+        if (buffer === null) return { schemaVersion: 1, files: {} };
+        const parsed: unknown = JSON.parse(new TextDecoder().decode(buffer));
         validateManifest(parsed);
         return parsed;
     }

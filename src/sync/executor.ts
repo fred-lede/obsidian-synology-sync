@@ -8,6 +8,7 @@ import { SyncState } from './state';
 import { RemoteTransaction } from './transaction';
 import { calculateSHA256 } from './utils';
 import { SyncLogger } from './logger';
+import { hasRemoteFile } from './remote-access';
 
 export class PlanExecutor {
     private fs: LocalFS;
@@ -31,10 +32,9 @@ export class PlanExecutor {
 
     private async remoteUnchanged(path: string, manifest: SyncManifest) {
         const entry = manifest.files[path];
-        const exists = await this.client.hasFile(`${this.folder}/${path}`);
         if (entry && !entry.deleted) {
-            if (!exists || await calculateSHA256(await this.client.downloadFile(`${this.folder}/${path}`)) !== entry.hash) throw new Error(t('safety.hashMismatch'));
-        } else if (exists) {
+            if (await calculateSHA256(await this.client.downloadFile(`${this.folder}/${path}`)) !== entry.hash) throw new Error(t('safety.hashMismatch'));
+        } else if (await hasRemoteFile(this.client, `${this.folder}/${path}`)) {
             // A file created outside the protocol must first be discovered by a full scan.
             throw new Error(t('safety.hashMismatch'));
         }
@@ -49,6 +49,11 @@ export class PlanExecutor {
             rev: (manifest.files[path]?.rev ?? 0) + 1, hash, size: buffer.byteLength,
             updatedBy: deviceId, updatedAt: Date.now()
         } } };
+        if (!manifest.files[path] || manifest.files[path].deleted) {
+            const remotePath = `${this.folder}/${path}`;
+            // The original uploader creates missing parents; preflight must not list them before creation.
+            await this.client.ensureRemoteFolder(remotePath.slice(0, remotePath.lastIndexOf('/')));
+        }
         await this.remoteUnchanged(path, manifest);
         await this.transaction.commit(path, next, deviceId, buffer);
         manifest.files = next.files;

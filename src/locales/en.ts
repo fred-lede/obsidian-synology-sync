@@ -1,4 +1,9 @@
 export default {
+	'api.metadataFailed': "Could not query remote file {{path}}: {{error}}",
+	'api.listFailed': "Could not list remote folder {{path}}: {{error}}",
+	'ui.statusView.remoteQueryFailed': "Remote status unavailable",
+	'ui.statusView.remoteQueryError': "Remote query failed: {{error}}",
+
 	'safety.invalidResponse': 'The NAS returned an invalid response. Sync stopped.',
 	'safety.invalidManifest': "Sync metadata is invalid. Sync stopped to protect your files.",
 	'safety.locked': "Sync is locked. If all devices have stopped syncing, follow the sync and recovery guide linked from the README.",

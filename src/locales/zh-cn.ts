@@ -1,4 +1,9 @@
 export default {
+	'api.metadataFailed': "无法查询远端文件 {{path}}：{{error}}",
+	'api.listFailed': "无法列出远端目录 {{path}}：{{error}}",
+	'ui.statusView.remoteQueryFailed': "无法获取远端状态",
+	'ui.statusView.remoteQueryError': "远端查询失败：{{error}}",
+
 	'safety.invalidResponse': 'NAS 返回无效响应，已停止同步。',
 	'safety.invalidManifest': "同步元数据无效，已停止同步以保护文件。",
 	'safety.locked': "同步已锁定。若所有设备均已停止同步，请查看 README 链接的同步与恢复指南。",

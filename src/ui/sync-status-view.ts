@@ -114,7 +114,15 @@ export class SyncStatusView extends ItemView {
             statusIcon = 'alert-triangle';
         } else if (localEntry) {
             const isLocalModified = localEntry.localMtime < localMtime;
-            const isRemoteModified = remoteMtime && remoteMtime > localEntry.localMtime;
+            let isRemoteModified = false;
+            const remoteRevRaw = dataObj?.version_id ?? dataObj?.revision_id;
+            const remoteRev = remoteRevRaw ? parseInt(remoteRevRaw, 10) : null;
+            
+            if (remoteRev !== null && localEntry.syncedRev) {
+                isRemoteModified = remoteRev > localEntry.syncedRev;
+            } else {
+                isRemoteModified = !!remoteMtime && remoteMtime > localEntry.localMtime;
+            }
             
             if (isLocalModified && isRemoteModified) {
                 statusText = t('ui.statusView.stateConflict');

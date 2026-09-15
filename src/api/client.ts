@@ -1,5 +1,6 @@
 import { requestUrl, RequestUrlParam, RequestUrlResponse } from 'obsidian';
 import { t } from '../locales';
+import { normalizeRemoteFolder } from './paths';
 
 interface ApiResponse {
 	success?: boolean;
@@ -29,6 +30,17 @@ export class SynologyClient {
 	getSyncTarget(folder: string): string {
 		return JSON.stringify([this.baseUrl, this.username, folder.replace(/\/+$/, '')]);
 	}
+
+    async resolveSyncFolder(folder: string): Promise<string> {
+        const path = normalizeRemoteFolder(folder);
+        if (!/^(?:id:|link:)/.test(path)) return path;
+        const result = await this.getMetadata(path) as { data: { display_path?: string; type?: string } };
+        const resolved = result.data.display_path;
+        if (result.data.type !== 'dir' || !resolved || !/^\/(?:mydrive|team-folders|views|volumes)\//.test(resolved)) {
+            throw new Error(t('safety.invalidResponse'));
+        }
+        return normalizeRemoteFolder(resolved);
+    }
 
 	set debugMode(value: boolean) {
 		this._debugMode = value;
@@ -204,14 +216,15 @@ export class SynologyClient {
 	async getMetadata(path: string): Promise<unknown> {
 		const endpoint = '/api/SynologyDrive/default/v2/files';
 		const params = { path };
-		try {
-			const res = await this.request(endpoint, params, 'GET');
-			return res.json;
-		} catch (e: unknown) {
-			const errorMsg = e instanceof Error ? e.message : String(e);
-			if (errorMsg.includes('1003')) return null;
-			throw e;
-		}
+        try {
+            const res = await this.request(endpoint, params, 'GET');
+            const result = res.json as ApiResponse;
+            if (!result.data) throw new Error(t('safety.invalidResponse'));
+            return result;
+        } catch (error) {
+            // 1003 is a failed query, not proof that the file does not exist.
+            throw new Error(t('api.metadataFailed', { path, error: error instanceof Error ? error.message : String(error) }));
+        }
 	}
 
 	/**
@@ -226,7 +239,7 @@ export class SynologyClient {
 		const limit = 200; // 降低 limit 避免移动端 JSON 过大被截断抛出 Parse Error
 		let hasMore = true;
 		
-		type ListResponse = ApiResponse & { data?: { items?: unknown[], has_more?: boolean } };
+		type ListResponse = ApiResponse & { data?: { items?: unknown[], total?: number, has_more?: boolean } };
 		let lastResponse: ListResponse | null = null;
 
 		while (hasMore) {
@@ -253,13 +266,13 @@ export class SynologyClient {
 			if (res.status >= 400) {
 				const json = res.json as ApiResponse | null;
 				const errText = (json && json.error ? `API Error Code: ${json.error.code}` : res.text) || `HTTP ${res.status}`;
-				throw new Error(`HTTP ${res.status}: ${errText}`);
+				throw new Error(t('api.listFailed', { path, error: `HTTP ${res.status}: ${errText}` }));
 			}
 			
 			const json = res.json as ListResponse | null;
 			if (json && json.success === false) {
 				const code = json.error?.code || 'Unknown';
-				throw new Error(`API Error Code: ${code} - ${json.error?.errors?.message || 'list node failed'}`);
+                throw new Error(t('api.listFailed', { path, error: `API Error Code: ${code} - ${json.error?.errors?.message || 'list node failed'}` }));
 			}
 			
 			if (json?.success !== true || !json.data || !Array.isArray(json.data.items)) throw new Error(t('safety.invalidResponse'));
@@ -270,12 +283,20 @@ export class SynologyClient {
 				allFiles.push(...json.data.items);
 			}
 			
-			if (json.data.has_more === true || (json.data.has_more === undefined && json.data.items.length === limit)) {
-				hasMore = true;
-				offset += limit;
-			} else {
-				hasMore = false;
-			}
+            const count = json.data.items.length;
+            const total = json.data.total;
+            if (total !== undefined) {
+                if (!Number.isSafeInteger(total) || total < allFiles.length || (count === 0 && allFiles.length < total)) {
+                    throw new Error(t('safety.invalidResponse'));
+                }
+                // v2 documents total, offset and limit. Advance by the actual returned count.
+                hasMore = allFiles.length < total;
+            } else {
+                // Compatibility for responses without total; never turn an incomplete page into absence.
+                hasMore = json.data.has_more === true || (json.data.has_more === undefined && count === limit);
+                if (hasMore && count === 0) throw new Error(t('safety.invalidResponse'));
+            }
+            offset += count;
 		}
 		
 		if (lastResponse && lastResponse.data) {
@@ -336,11 +357,13 @@ export class SynologyClient {
 	 * 递归确保远程目录存在
 	 */
 	async ensureRemoteFolder(path: string): Promise<void> {
+        path = normalizeRemoteFolder(path);
+        if (/^(?:id:|link:)/.test(path)) return;
 		const parts = path.split('/').filter(p => p);
 		let current = '';
 		for (let i = 0; i < parts.length; i++) {
 			current += '/' + parts[i];
-			if (current === '/mydrive' || current === '/team-folders' || (parts[0] === 'team-folders' && i === 1)) {
+			if (i === 0 || ((parts[0] === 'team-folders' || parts[0] === 'views') && i === 1)) {
 				continue;
 			}
 			try {

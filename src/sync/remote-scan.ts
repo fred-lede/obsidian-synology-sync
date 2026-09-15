@@ -12,7 +12,7 @@ export async function scanRemote(client: SynologyClient, root: string, manifest:
         const folder = queue.shift()!;
         if (visited.has(folder)) throw new Error(t('safety.invalidManifest'));
         visited.add(folder);
-        const res = await client.listFiles(folder) as { success?: boolean; data?: { items?: Array<{ name: string; path: string; isdir: boolean }> } };
+        const res = await client.listFiles(folder) as { success?: boolean; data?: { items?: Array<{ name: string; path: string; isdir?: boolean; type?: string }> } };
         if (res.success === false || !Array.isArray(res.data?.items)) throw new Error(t('safety.invalidManifest'));
         for (const item of res.data.items) {
             if (typeof item.name !== 'string' || item.name.includes('/') || item.name.includes('\\')) throw new Error(t('safety.invalidManifest'));
@@ -20,7 +20,7 @@ export async function scanRemote(client: SynologyClient, root: string, manifest:
             const remotePath = `${folder}/${item.name}`;
             const path = remotePath.slice(root.length + 1);
             if (!validPath(path)) throw new Error(t('safety.invalidManifest'));
-            if (item.isdir) { queue.push(remotePath); continue; }
+            if (item.type === 'dir' || item.isdir === true) { queue.push(remotePath); continue; }
             // Existing tombstones remain authoritative, including after long offline periods.
             if (manifest.files[path]?.deleted) continue;
             const buffer = await client.downloadFile(remotePath);

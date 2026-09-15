@@ -277,7 +277,8 @@ export default class SynologySyncPlugin extends Plugin {
 		const target = client.getSyncTarget(syncFolder);
 		if (target !== this.syncTarget) { this.deletions = new DeletionTracker(); this.syncTarget = target; }
 		const state = new SyncState(this.app, this.manifest.dir!, target);
-		return new SyncEngine(this.app, client, state, this.logger, syncFolder, this.deletions);
+		const remoteFolder = await client.resolveSyncFolder(syncFolder);
+		return new SyncEngine(this.app, client, state, this.logger, remoteFolder, this.deletions);
 	}
 
 	async runEngineSync(fullScan: boolean, showNotice: boolean = false) {

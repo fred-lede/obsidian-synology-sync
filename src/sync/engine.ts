@@ -11,6 +11,7 @@ import { RemoteTransaction } from './transaction';
 import { PlanExecutor } from './executor';
 import { scanRemote } from './remote-scan';
 import { validPath } from './validation';
+import { normalizeRemoteFolder } from '../api/paths';
 
 type Mode = 'sync' | 'upload' | 'download' | 'rebuild';
 
@@ -22,10 +23,7 @@ export class SyncEngine {
 
     constructor(private app: App, private client: SynologyClient, private state: SyncState,
         private logger: SyncLogger, private remoteFolder: string, private deletions = new DeletionTracker()) {
-        if (!remoteFolder.startsWith('/mydrive/') && !remoteFolder.startsWith('/team-folders/')) {
-            this.remoteFolder = `/mydrive${remoteFolder.startsWith('/') ? '' : '/'}${remoteFolder}`;
-        }
-        this.remoteFolder = this.remoteFolder.replace(/\/+/g, '/').replace(/\/$/, '');
+        this.remoteFolder = normalizeRemoteFolder(remoteFolder);
         this.manager = new ManifestManager(client, this.remoteFolder);
         this.transaction = new RemoteTransaction(client, this.manager, this.remoteFolder);
         this.executor = new PlanExecutor(app, client, state, logger, this.manager, this.transaction, this.remoteFolder);

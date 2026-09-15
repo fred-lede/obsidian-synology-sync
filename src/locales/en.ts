@@ -1,4 +1,5 @@
 export default {
+	'safety.recordReadFailed': 'Could not read sync record {{path}}: {{error}}',
 	'api.metadataFailed': "Could not query remote file {{path}}: {{error}}",
 	'api.listFailed': "Could not list remote folder {{path}}: {{error}}",
 	'ui.statusView.remoteQueryFailed': "Remote status unavailable",

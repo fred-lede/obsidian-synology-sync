@@ -1,4 +1,5 @@
 export default {
+	'safety.recordReadFailed': '无法读取同步记录 {{path}}：{{error}}',
 	'api.metadataFailed': "无法查询远端文件 {{path}}：{{error}}",
 	'api.listFailed': "无法列出远端目录 {{path}}：{{error}}",
 	'ui.statusView.remoteQueryFailed': "无法获取远端状态",

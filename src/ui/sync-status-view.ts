@@ -2,10 +2,13 @@ import { ItemView, WorkspaceLeaf, setIcon } from 'obsidian';
 import type SynologySyncPlugin from '../main';
 import { SyncState } from '../sync/state';
 import { t } from '../locales';
+import { remoteFilePath } from '../api/paths';
 
 interface RemoteMetadata {
     data?: {
         mtime?: number;
+        modified_time?: number;
+        version_id?: string;
         size?: number;
         file_id?: string;
         revision_id?: string;
@@ -82,32 +85,33 @@ export class SyncStatusView extends ItemView {
         const localSize = activeFile.stat.size;
 
         let remoteMetadata: RemoteMetadata | null = null;
+        let remoteError = '';
         try {
             const client = await this.plugin.getClient();
             const { syncFolder } = this.plugin.settings;
             if (syncFolder) {
-                let targetPath = `${syncFolder}/${activeFile.path}`;
-                if (!targetPath.startsWith('/mydrive/') && !targetPath.startsWith('/team-folders/')) {
-                    targetPath = `/mydrive${targetPath.startsWith('/') ? '' : '/'}${targetPath}`;
-                }
-                targetPath = targetPath.replace(/\/\//g, '/');
-                
+                const targetPath = remoteFilePath(await client.resolveSyncFolder(syncFolder), activeFile.path);
                 remoteMetadata = (await client.getMetadata(targetPath)) as RemoteMetadata;
             }
         } catch (e) {
+            remoteError = e instanceof Error ? e.message : String(e);
             console.error('Failed to fetch remote metadata', e);
         }
         
         loadingEl.remove();
 
         const dataObj = remoteMetadata?.data;
-        const remoteMtime = dataObj?.mtime ? dataObj.mtime * 1000 : null;
+        const modifiedTime = dataObj?.modified_time ?? dataObj?.mtime;
+        const remoteMtime = modifiedTime ? modifiedTime * 1000 : null;
         const remoteSize = dataObj?.size;
 
         // Determine Status
         let statusText = t('ui.statusView.stateUntracked');
         let statusIcon = 'help-circle';
-        if (localEntry) {
+        if (remoteError) {
+            statusText = t('ui.statusView.remoteQueryFailed');
+            statusIcon = 'alert-triangle';
+        } else if (localEntry) {
             const isLocalModified = localEntry.localMtime < localMtime;
             const isRemoteModified = remoteMtime && remoteMtime > localEntry.localMtime;
             
@@ -142,7 +146,9 @@ export class SyncStatusView extends ItemView {
 
         // Remote Info
         contentEl.createDiv({ text: t('ui.statusView.remoteSection'), cls: 'sync-status-section-header' });
-        if (dataObj) {
+        if (remoteError) {
+            contentEl.createDiv({ text: t('ui.statusView.remoteQueryError', { error: remoteError }), cls: 'sync-status-not-found' });
+        } else if (dataObj) {
             const remoteInfoEl = contentEl.createEl('ul');
             if (remoteMtime) {
                 remoteInfoEl.createEl('li', { text: `${t('ui.statusView.remoteMtime')}: ${new Date(remoteMtime).toLocaleString()}` });
@@ -153,8 +159,8 @@ export class SyncStatusView extends ItemView {
             if (dataObj.file_id) {
                 remoteInfoEl.createEl('li', { text: `${t('ui.statusView.remoteFileId')}: ${dataObj.file_id}` });
             }
-            if (dataObj.revision_id) {
-                remoteInfoEl.createEl('li', { text: `${t('ui.statusView.remoteRevId')}: ${dataObj.revision_id}` });
+            if (dataObj.version_id ?? dataObj.revision_id) {
+                remoteInfoEl.createEl('li', { text: `${t('ui.statusView.remoteRevId')}: ${dataObj.version_id ?? dataObj.revision_id}` });
             }
         } else {
             contentEl.createDiv({ text: t('ui.statusView.remoteNotFound'), cls: 'sync-status-not-found' });

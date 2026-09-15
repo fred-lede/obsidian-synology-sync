@@ -1,0 +1,66 @@
+{
+  "success": true,
+  "data": {
+    "name": "123",
+    "type": "dir",
+    "path": "/123",
+    "permanent_link": "x0PcRbbAsiLk9h6lolqnjQMNDYVq9Rvq",
+    "created_time": 1706263189,
+    "display_path": "/mydrive/123",
+    "size": 0,
+    "file_id": "798778330294827825",
+    "modified_time": 1728375733,
+    "access_time": 1728375733,
+    "change_time": 1728375733,
+    "parent_id": "785518539946631169",
+    "adv_shared": false,
+    "app_properties": {
+      "type": "none"
+    },
+    "capabilities": {
+      "can_comment": true,
+      "can_delete": true,
+      "can_download": true,
+      "can_encrypt": true,
+      "can_organize": true,
+      "can_preview": true,
+      "can_read": true,
+      "can_rename": true,
+      "can_share": true,
+      "can_sync": true,
+      "can_write": true
+    },
+    "change_id": 3108,
+    "content_snippet": "",
+    "content_type": "dir",
+    "disable_download": false,
+    "dsm_path": "",
+    "enable_watermark": false,
+    "encrypted": false,
+    "force_watermark_download": false,
+    "hash": "",
+    "image_metadata": {
+      "time": 1728375733
+    },
+    "labels": [],
+    "max_id": 3108,
+    "owner": {
+      "name": "user1",
+      "uid": 1026,
+      "display_name": "user1",
+      "nickname": ""
+    },
+    "properties": {},
+    "removed": false,
+    "revisions": 1,
+    "shared": false,
+    "shared_with": [],
+    "starred": true,
+    "support_remote": false,
+    "sync_id": 3028,
+    "sync_to_device": false,
+    "transient": false,
+    "version_id": "3028",
+    "watermark_version": 0
+  }
+}

@@ -2,6 +2,7 @@ import { build } from 'esbuild';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 const bundle = await build({ stdin: { contents: `
 export {SyncEngine} from './src/sync/engine';
@@ -10,7 +11,10 @@ export {ManifestManager} from './src/sync/manifest';
 export {DeletionTracker} from './src/sync/deletions';
 export {computeSyncPlan} from './src/sync/differ';
 export {TFile} from 'obsidian';
-export {SynologyClient} from './src/api/client';`, resolveDir: process.cwd() },
+export {SynologyClient} from './src/api/client';
+export {normalizeRemoteFolder,remoteFilePath} from './src/api/paths';
+export {listRemoteFiles,readRemoteRecord} from './src/sync/remote-access';
+export {withRemoteDiagnostics} from './src/sync/remote-diagnostics';`, resolveDir: process.cwd() },
     bundle: true, format: 'esm', platform: 'node', write: false,
     plugins: [{ name: 'obsidian-double', setup(b) {
         b.onResolve({ filter: /^obsidian$/ }, () => ({ path: 'obsidian', namespace: 'mock' }));
@@ -21,7 +25,7 @@ export const getLanguage=()=> 'en';
 export const requestUrl=(req)=>globalThis.mockRequest(req);` }));
     } }]
 });
-const {SyncEngine, SyncState, ManifestManager, DeletionTracker, computeSyncPlan, TFile, SynologyClient} = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const {SyncEngine, SyncState, ManifestManager, DeletionTracker, computeSyncPlan, TFile, SynologyClient, normalizeRemoteFolder, remoteFilePath, listRemoteFiles, readRemoteRecord, withRemoteDiagnostics} = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 globalThis.crypto ??= webcrypto;
 Error.stackTraceLimit = 3;
 const bytes = text => new TextEncoder().encode(text).buffer;
@@ -42,6 +46,7 @@ class Remote {
         // No await between the final existence check and creation, just like an exclusive server create.
         if (this.folders.has(path)) throw Error('exists');
         this.folders.add(path);
+        return {success:true};
     }
     async uploadFile(path, buffer) {
         this.fail?.('upload',path);
@@ -62,7 +67,7 @@ class Remote {
             const rest=key.slice(path.length+1); const name=rest.split('/')[0];
             items.set(name,{name,path:path+'/'+name,isdir:rest.includes('/')||this.folders.has(key)});
         }
-        return {data:{items:[...items.values()]}};
+        return {data:{total:items.size,items:[...items.values()]}};
     }
     manifest() { return JSON.parse(text(this.files.get(root+'/.sync_manifest.json'))); }
 }
@@ -202,9 +207,9 @@ test('API HTTP 200 business errors reject deletion',async()=>{
     globalThis.mockRequest=async()=>response({success:false,error:{code:1000}});
     await assert.rejects(new SynologyClient('https://nas.test','user').deleteFile('/mydrive/a.md'),/1000/);
 });
-test('exclusive create sends stop and rejects malformed success',async()=>{
+test('exclusive create sends stop without changing legacy response handling',async()=>{
     let request;globalThis.mockRequest=async req=>{request=req;return response({});};
-    await assert.rejects(new SynologyClient('https://nas.test','user').createFolder('/mydrive/.sync_lock','stop'));
+    assert.deepEqual(await new SynologyClient('https://nas.test','user').createFolder('/mydrive/.sync_lock','stop'),{});
     assert.equal(new URL(request.url).searchParams.get('conflict_action'),'stop');
 });
 test('API listing collects multiple pages',async()=>{
@@ -213,7 +218,7 @@ test('API listing collects multiple pages',async()=>{
 });
 test('API invalid list cannot imply missing metadata',async()=>{
     globalThis.mockRequest=async()=>response({success:true,data:{}});
-    await assert.rejects(new SynologyClient('https://nas.test','user').hasFile('/mydrive/test/.sync_manifest.json'));
+    await assert.rejects(listRemoteFiles(new SynologyClient('https://nas.test','user'),'/mydrive/test'));
 });
 
 test('third device joins after conflicting edits and all devices converge',async()=>{
@@ -239,4 +244,113 @@ test('text edit immediately before atomic replacement is preserved',async()=>{
     const r=new Remote();const a=device(r,{'a.md':'A'});await a.sync();const b=device(r);await b.sync();a.put('a.md','remote');await a.sync();
     const original=b.app.vault.process;b.app.vault.process=async(file,fn)=>{b.put(file.path,'latest typing');return original(file,fn);};
     await assert.rejects(b.engine().runSync(false));assert.equal(b.read('a.md'),'latest typing');
+});
+
+test('explicit Drive roots and ID-system folders are not prefixed twice',()=>{
+    for(const path of ['/mydrive','/mydrive/','/team-folders/team','/views/123','/volumes/home/Drive','id:123','link:abc']) {
+        assert.equal(normalizeRemoteFolder(path),path.replace(/\/$/,''));
+        if (/^(id:|link:)/.test(path)) assert.throws(()=>remoteFilePath(path,'note.md'));
+        else assert.equal(remoteFilePath(path,'note.md'),path.replace(/\/$/,'')+'/note.md');
+    }
+    assert.equal(normalizeRemoteFolder('/Notes'),'/mydrive/Notes');
+    assert.equal(remoteFilePath('/mydrive','note.md'),'/mydrive/note.md');
+});
+test('legacy metadata contract returns null for code 1003',async()=>{
+    globalThis.mockRequest=async()=>response({success:false,error:{code:1003}});
+    assert.equal(await new SynologyClient('https://nas.test','user').getMetadata('/mydrive/note.md'),null);
+});
+test('list code 1003 reports the requested path without speculative retries',async()=>{
+    let calls=0;globalThis.mockRequest=async()=>{calls++;return response({success:false,error:{code:1003}});};
+    await assert.rejects(listRemoteFiles(new SynologyClient('https://nas.test','user'),'/mydrive/Notes'),/Notes.*1003/);
+    assert.equal(calls,1);
+});
+test('v2 type dir entries recurse without downloading directories',async()=>{
+    const r=new Remote();await seed(r,'folder/a.md','A');const original=r.listFiles.bind(r);
+    r.listFiles=async path=>{const res=await original(path);return {success:true,data:{total:res.data.items.length,items:res.data.items.map(({isdir,...item})=>({...item,type:isdir?'dir':'file'}))}};};
+    const d=device(r);await d.sync();assert.equal(d.read('folder/a.md'),'A');
+});
+
+test('documented total ends listing at an exact page boundary',async()=>{
+    const offsets=[];globalThis.mockRequest=async req=>{
+        const offset=Number(new URL(req.url).searchParams.get('offset'));offsets.push(offset);
+        return response({success:true,data:{total:200,items:Array.from({length:200},(_,i)=>({name:String(i),type:'file'}))}});
+    };
+    const result=await new SynologyClient('https://nas.test','user').listFiles('/mydrive/Notes');
+    assert.equal(result.data.items.length,200);assert.deepEqual(offsets,[0]);
+});
+test('sync boundary rejects a partial result without changing legacy API pagination',async()=>{
+    globalThis.mockRequest=async()=>response({success:true,data:{total:3,items:[{name:'A',type:'file'}]}});
+    await assert.rejects(listRemoteFiles(new SynologyClient('https://nas.test','user'),'/mydrive/Notes'));
+});
+test('sync boundary rejects an empty incomplete listing',async()=>{
+    globalThis.mockRequest=async()=>response({success:true,data:{total:2,items:[]}});
+    await assert.rejects(listRemoteFiles(new SynologyClient('https://nas.test','user'),'/mydrive/Notes'));
+});
+test('metadata request and fields match the repository API documentation example',async()=>{
+    const fixture=JSON.parse(readFileSync(new URL('./fixtures/drive-v2-metadata.json',import.meta.url),'utf8'));
+    let request;globalThis.mockRequest=async req=>{request=req;return response(fixture);};
+    const result=await new SynologyClient('https://nas.test','user').getMetadata('/mydrive/123');
+    const url=new URL(request.url);
+    assert.equal(request.method,'GET');assert.equal(url.pathname,'/api/SynologyDrive/default/v2/files');
+    assert.equal(url.searchParams.get('path'),'/mydrive/123');
+    assert.equal(result.data.type,'dir');assert.equal(result.data.display_path,'/mydrive/123');
+    assert.equal(result.data.modified_time,1728375733);assert.equal(result.data.version_id,'3028');
+});
+test('list request consumes the unmodified repository API documentation example',async()=>{
+    const fixture=JSON.parse(readFileSync(new URL('./fixtures/drive-v2-list.json',import.meta.url),'utf8'));
+    const requests=[];globalThis.mockRequest=async req=>{requests.push(req);return response(fixture);};
+    const result=await new SynologyClient('https://nas.test','user').listFiles('/mydrive/123');
+    assert.equal(requests.length,1);const request=requests[0];const url=new URL(request.url);
+    assert.equal(request.method,'POST');assert.equal(url.pathname,'/api/SynologyDrive/default/v2/files/list');
+    assert.equal(url.searchParams.get('path'),'/mydrive/123');assert.equal(url.searchParams.get('offset'),'0');
+    assert.equal(url.searchParams.get('limit'),'200');assert.deepEqual(JSON.parse(request.body),{});
+    assert.equal(result.data.total,2);assert.equal(result.data.items.length,2);
+    assert.equal(result.data.items[0].type,'file');assert.equal(result.data.items[0].path,'/123/2.jpg');
+});
+
+test('existing manifest is read without a directory listing',async()=>{
+    const r=new Remote();await seed(r,'a.md','A');r.listFiles=async()=>{throw Error('API Error Code: 1003');};
+    const manager=new ManifestManager(r,root);assert.equal((await manager.downloadManifest()).files['a.md'].hash,await hash(bytes('A')));
+});
+test('exclusive lock acquisition no longer requires directory enumeration',async()=>{
+    const r=new Remote();r.listFiles=async()=>{throw Error('API Error Code: 1003');};const manager=new ManifestManager(r,root);await manager.acquireLock('A');await manager.releaseLock('A');
+});
+test('failed optional-record read is not converted to an empty manifest',async()=>{
+    const r=new Remote();r.listFiles=async()=>{throw Error('API Error Code: 1003');};
+    await assert.rejects(readRemoteRecord(r,root+'/.sync_pending.json'),/\.sync_pending\.json.*1003/);
+});
+
+test('new nested upload creates its parent before the sync existence check',async()=>{
+    const r=new Remote();const original=r.listFiles.bind(r);
+    r.listFiles=async path=>{if(!r.folders.has(path))throw Error('API Error Code: 1003');return original(path);};
+    const d=device(r,{'new/sub/a.md':'A'});await d.sync();assert.equal(text(r.files.get(root+'/new/sub/a.md')),'A');
+});
+
+test('HTTP 400 during lock creation names the operation and path once',async()=>{
+    const r=new Remote();r.createFolder=async()=>{throw Error('HTTP 400: HTTP 400');};
+    await assert.rejects(device(r).sync(),error=>{
+        assert.match(error.message,/create sync lock/);assert.match(error.message,/\/mydrive\/test\/\.sync_lock/);
+        assert.equal(error.message.match(/HTTP 400/g).length,1);return true;
+    });
+});
+test('lock cleanup failure never masks the primary sync failure',async()=>{
+    const r=new Remote();const d=device(r,{'a.md':'A'});await d.sync();d.put('a.md','B');
+    r.fail=(operation,path)=>{
+        if(operation==='upload'&&path===root+'/a.md')throw Error('primary upload failure');
+        if(operation==='delete'&&path===root+'/.sync_lock')throw Error('HTTP 400: HTTP 400');
+    };
+    await assert.rejects(d.sync(),/primary upload failure/);
+    assert.ok(d.logs.some(log=>log.details?.includes('primary upload failure')));
+    assert.ok(d.logs.some(log=>log.details?.includes('HTTP 400')));
+});
+test('cleanup failure after successful sync is still reported',async()=>{
+    const r=new Remote();const d=device(r,{'a.md':'A'});
+    r.fail=(operation,path)=>{if(operation==='delete'&&path===root+'/.sync_lock')throw Error('HTTP 400: HTTP 400');};
+    await assert.rejects(d.sync(),/delete remote entry.*\.sync_lock.*HTTP 400/);
+});
+test('diagnostics preserve API arguments and original failure without extra requests',async()=>{
+    const r=new Remote();const calls=[];const originalError=Error('HTTP 400: HTTP 400');
+    r.createFolder=async(...args)=>{calls.push(args);throw originalError;};
+    await assert.rejects(withRemoteDiagnostics(r).createFolder(root+'/.sync_lock','stop'),error=>{assert.equal(error.originalError,originalError);return true;});
+    assert.deepEqual(calls,[[root+'/.sync_lock','stop']]);
 });

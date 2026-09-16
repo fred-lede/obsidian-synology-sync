@@ -1,4 +1,34 @@
 export default {
+	'sync.operationFailed': 'Error al {{operation}} ({{path}}): {{error}}',
+	'sync.lockRead.present': 'Comprobación de bloqueo: owner.json está listado, pero falló su descarga. Sincronización detenida.',
+	'sync.lockRead.notListed': 'Comprobación de bloqueo: owner.json no aparece en el directorio de bloqueo. Sincronización detenida; el bloqueo no se recreó.',
+	'sync.lockRead.unknown': 'Comprobación de bloqueo: no se pudo determinar si owner.json existe: {{error}}',
+	'sync.operation.createFolder': 'crear carpeta',
+	'sync.operation.createLock': 'crear bloqueo de sincronización',
+	'sync.operation.prepareFolder': 'preparar carpeta remota',
+	'sync.operation.upload': 'subir archivo',
+	'sync.operation.download': 'descargar archivo',
+	'sync.operation.delete': 'eliminar entrada remota',
+	'sync.operation.list': 'listar carpeta',
+
+	'safety.recordReadFailed': 'No se pudo leer el registro de sincronización {{path}}: {{error}}',
+	'api.metadataFailed': 'No se pudo consultar el archivo remoto {{path}}: {{error}}',
+	'api.listFailed': 'No se pudo listar la carpeta remota {{path}}: {{error}}',
+	'ui.statusView.remoteQueryFailed': 'Estado remoto no disponible',
+	'ui.statusView.remoteQueryError': 'Error en la consulta remota: {{error}}',
+
+	'safety.invalidResponse': 'El NAS devolvió una respuesta no válida. Sincronización detenida.',
+	'safety.invalidManifest': 'Los metadatos de sincronización no son válidos. Sincronización detenida para proteger tus archivos.',
+	'safety.locked': 'La sincronización está bloqueada. Si todos los dispositivos han detenido la sincronización, sigue la guía de sincronización y recuperación enlazada en el README.',
+	'safety.hashMismatch': 'El contenido del archivo no coincide con su hash registrado. Sincronización detenida; reintenta una sincronización completa.',
+	'safety.pending': 'Una operación remota inconclusa requiere recuperación antes de sincronizar.',
+	'safety.localChanged': 'El archivo cambió durante la sincronización: {{path}}. Reintenta para conservar la última edición.',
+	'safety.copyExists': 'Ya existe un archivo diferente en la ruta de recuperación: {{path}}. No se sobrescribió nada.',
+	'safety.conflictPreserved': 'Conflicto resuelto conservando el contenido divergente.',
+	'safety.busy': 'Ya hay una sincronización en curso.',
+	'safety.massDelete': 'Eliminación masiva bloqueada. Revisa los archivos eliminados y recupéralos antes de reintentar.',
+	'safety.largeFile': 'Sincronización detenida: el archivo supera el límite de 50 MB: {{path}}.',
+
 	'plugin.name': 'Synology Sync',
 
 	'command.uploadActive': 'Subir archivo activo al NAS',
@@ -6,7 +36,6 @@ export default {
 	'command.runQuick': 'Ejecutar Synology Sync (Rápido)',
 	'command.runFull': 'Ejecutar Synology Sync (Completo)',
 	'command.showLog': 'Mostrar registros de sincronización',
-
 
 	'notice.noActiveFile': 'No hay ningún archivo activo seleccionado',
 	'notice.loginRequired': 'Primero inicia sesión en Synology Drive desde los ajustes',
@@ -61,19 +90,19 @@ export default {
 	'settings.dangerZone': 'Zona de riesgo / Inicialización por primera vez',
 	'settings.dangerZone.desc': 'Las siguientes operaciones implican sobrescritura forzada en un solo sentido de archivos o el borrado de estado; procede con precaución.',
 	'settings.forceUpload.name': 'Forzar subida completa (sobrescribir NAS)',
-	'settings.forceUpload.desc': 'El origen de la verdad es lo local. Invalida los archivos extra remotos y sube todas las notas locales al NAS.',
+	'settings.forceUpload.desc': 'Sube los archivos locales conservando las versiones remotas diferentes. No elimina los archivos que solo existen en el remoto.',
 	'settings.forceUpload.btn': 'Forzar subida',
-	'settings.forceUpload.confirm': 'ADVERTENCIA: Esto sobrescribirá y reiniciará por completo la carpeta de sincronización del NAS con los archivos locales. ¿Estás seguro?',
+	'settings.forceUpload.confirm': '¿Subir los archivos locales y conservar las versiones remotas diferentes? Los archivos que solo existen en el remoto se mantendrán.',
 
 	'settings.forceDownload.name': 'Forzar descarga completa (sobrescribir local)',
-	'settings.forceDownload.desc': 'El origen de la verdad es lo remoto. Invalida los archivos extra locales y descarga todas las notas del NAS a tu equipo.',
+	'settings.forceDownload.desc': 'Descarga los archivos remotos conservando las versiones locales diferentes. No elimina los archivos que solo existen en local.',
 	'settings.forceDownload.btn': 'Forzar descarga',
-	'settings.forceDownload.confirm': 'ADVERTENCIA: Esto eliminará los archivos locales extra y sobrescribirá por completo el vault local con los archivos del NAS. ¿Estás seguro?',
+	'settings.forceDownload.confirm': '¿Descargar los archivos remotos y conservar las versiones locales diferentes? Los archivos que solo existen en local se mantendrán.',
 
 	'settings.rebuild.name': 'Reconstruir base de sincronización',
-	'settings.rebuild.desc': 'Se usa después de una copia manual por USB. Descarta el estado actual de sincronización y crea una nueva línea base mediante comparación de hashes.',
+	'settings.rebuild.desc': 'Vuelve a verificar el contenido real y reconstruye de forma segura las instantáneas locales de sincronización.',
 	'settings.rebuild.btn': 'Reconstruir estado',
-	'settings.rebuild.confirm': '¿Estás seguro de que quieres forzar la reconstrucción del snapshot de estado de sincronización?',
+	'settings.rebuild.confirm': '¿Volver a verificar ambos lados y reconstruir las instantáneas locales, conservando el contenido diferente?',
 
 	'settings.initialSync.title': 'Configuración de la primera sincronización',
 	'settings.initialSync.desc': 'Es la primera vez que te conectas a este NAS. ¿Cómo quieres inicializar la sincronización?',

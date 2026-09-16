@@ -2,7 +2,7 @@ import { ItemView, WorkspaceLeaf, setIcon } from 'obsidian';
 import type SynologySyncPlugin from '../main';
 import { SyncState } from '../sync/state';
 import { t } from '../locales';
-import { remoteFilePath } from '../api/paths';
+import { normalizeRemoteFolder, remoteFilePath } from '../api/paths';
 import { syncTarget } from '../sync/remote-access';
 import { ManifestManager, SyncManifest } from '../sync/manifest';
 
@@ -92,7 +92,7 @@ export class SyncStatusView extends ItemView {
             const client = await this.plugin.getClient();
             const { syncFolder } = this.plugin.settings;
             if (syncFolder) {
-                const manager = new ManifestManager(client, syncFolder);
+                const manager = new ManifestManager(client, normalizeRemoteFolder(syncFolder));
                 remoteManifest = await manager.downloadManifest();
 
                 const targetPath = remoteFilePath(syncFolder, activeFile.path);

@@ -1,11 +1,13 @@
 import { getLanguage } from 'obsidian';
 import en from './en';
 import zhCN from './zh-cn';
+import es from './es';
 
 const localeMap: Record<string, Record<string, string>> = {
 	'en': en,
 	'zh': zhCN,
 	'zh-TW': zhCN, // fallback to simplified chinese for now
+	'es': es,
 };
 
 export function t(key: keyof typeof en, vars?: Record<string, string>): string {

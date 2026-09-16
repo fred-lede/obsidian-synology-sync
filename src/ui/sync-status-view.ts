@@ -4,6 +4,7 @@ import { SyncState } from '../sync/state';
 import { t } from '../locales';
 import { remoteFilePath } from '../api/paths';
 import { syncTarget } from '../sync/remote-access';
+import { ManifestManager, SyncManifest } from '../sync/manifest';
 
 interface RemoteMetadata {
     data?: {
@@ -84,12 +85,16 @@ export class SyncStatusView extends ItemView {
         const localMtime = activeFile.stat.mtime;
         const localSize = activeFile.stat.size;
 
+        let remoteManifest: SyncManifest | null = null;
         let remoteMetadata: RemoteMetadata | null = null;
         let remoteError = '';
         try {
             const client = await this.plugin.getClient();
             const { syncFolder } = this.plugin.settings;
             if (syncFolder) {
+                const manager = new ManifestManager(client, syncFolder);
+                remoteManifest = await manager.downloadManifest();
+
                 const targetPath = remoteFilePath(syncFolder, activeFile.path);
                 remoteMetadata = (await client.getMetadata(targetPath)) as RemoteMetadata | null;
                 if (remoteMetadata === null) remoteError = t('ui.statusView.remoteQueryFailed');
@@ -114,15 +119,8 @@ export class SyncStatusView extends ItemView {
             statusIcon = 'alert-triangle';
         } else if (localEntry) {
             const isLocalModified = localEntry.localMtime < localMtime;
-            let isRemoteModified = false;
-            const remoteRevRaw = dataObj?.version_id ?? dataObj?.revision_id;
-            const remoteRev = remoteRevRaw ? parseInt(remoteRevRaw, 10) : null;
-            
-            if (remoteRev !== null && localEntry.syncedRev) {
-                isRemoteModified = remoteRev > localEntry.syncedRev;
-            } else {
-                isRemoteModified = !!remoteMtime && remoteMtime > localEntry.localMtime;
-            }
+            const remoteEntry = remoteManifest?.files[activeFile.path];
+            const isRemoteModified = remoteEntry ? remoteEntry.rev !== localEntry.syncedRev : false;
             
             if (isLocalModified && isRemoteModified) {
                 statusText = t('ui.statusView.stateConflict');
